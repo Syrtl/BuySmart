@@ -4,27 +4,27 @@
 */
 
 :root {
-  --bg: #0f172a;
-  --surface: #111827;
-  --surface-soft: #1f2933;
+  --bg: #f7f9fc;
+  --surface: #ffffff;
+  --surface-soft: #eef2f7;
   --primary: #3b82f6;
   --primary-hover: #2563eb;
   --primary-pressed: #1e40af;
-  --secondary: #94a3b8;
-  --text: #e5e7eb;
-  --text-muted: #94a3b8;
+  --secondary: #64748b;
+  --text: #0f172a;
+  --text-muted: #475569;
   --muted: #64748b;
-  --divider: rgba(255, 255, 255, 0.06);
+  --divider: rgba(15, 23, 42, 0.12);
   --success: #16a34a;
   --danger: #dc2626;
-  --warning-bg: #1f2937;
+  --warning-bg: #fff7ed;
   --ring: rgba(59, 130, 246, 0.32);
   --radius-sm: 12px;
   --radius-md: 14px;
   --radius-lg: 18px;
-  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.25);
-  --shadow-md: 0 10px 30px rgba(0, 0, 0, 0.35);
-  --shadow-lg: 0 20px 48px rgba(0, 0, 0, 0.45);
+  --shadow-sm: 0 4px 12px rgba(15, 23, 42, 0.08);
+  --shadow-md: 0 10px 30px rgba(15, 23, 42, 0.14);
+  --shadow-lg: 0 20px 48px rgba(15, 23, 42, 0.2);
   --speed: 180ms;
 }
 
