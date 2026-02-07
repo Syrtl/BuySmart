@@ -317,6 +317,18 @@ def _slice_history(points: list[PricePoint], weeks: int) -> list[PricePoint]:
     return sliced
 
 
+def _anchor_current_point(points: list[PricePoint], target_price: float | None) -> list[PricePoint]:
+    """Force the latest point (Now) to match the known current price."""
+    if not points:
+        return points
+    if target_price is None or target_price <= 0:
+        return points
+    anchored = list(points)
+    last = anchored[-1]
+    anchored[-1] = PricePoint(label=last.label, date=last.date, price=round(float(target_price), 2))
+    return anchored
+
+
 def _points_from_cache(raw_points: Any, expected_count: int) -> list[PricePoint] | None:
     if not isinstance(raw_points, list) or len(raw_points) != expected_count:
         return None
@@ -396,6 +408,7 @@ def get_price_history(
                 and _is_baseline_compatible(cached_baseline, baseline_price)
                 and schema_version == _CACHE_SCHEMA_VERSION
             ):
+                points = _anchor_current_point(points, baseline_price)
                 prices = [p.price for p in points]
                 return PriceHistoryResponse(
                     productId=normalized_product_id,
@@ -415,6 +428,7 @@ def get_price_history(
             category=category,
         )
         points = _slice_history(full_points, normalized_weeks)
+        points = _anchor_current_point(points, baseline_price)
         last_updated = _to_iso_z(now)
 
         by_product[period_key] = {

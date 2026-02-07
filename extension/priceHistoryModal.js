@@ -154,7 +154,10 @@
   };
 
   PriceHistoryModal.prototype.loadHistory = async function (productId, currentPrice, requestToken) {
-    var cacheKey = String(productId);
+    var normalizedCurrent = (currentPrice != null && isFinite(Number(currentPrice)))
+      ? Number(currentPrice).toFixed(2)
+      : 'na';
+    var cacheKey = String(productId) + '::' + normalizedCurrent;
     var cached = this.sessionCache.get(cacheKey);
     if (cached) {
       if (requestToken !== this.currentRequestToken) return;
