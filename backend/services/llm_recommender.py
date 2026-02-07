@@ -116,9 +116,10 @@ def _validate_schema(obj: Any) -> bool:
 
 
 _NOISY_LABEL_RE = re.compile(
-    r"(?i)\b(?:sponsored|product\s*page|list\s*price|list|price)\b\s*:?"
+    r"(?i)\b(?:sponsored|product\s*page|list\s*price|list|price|typical)\b\s*:?"
 )
 _DUP_CURRENCY_RE = re.compile(r"(\$\s*\d+(?:\.\d{1,2})?)\s*(?:\1\s*)+")
+_MONEY_RE = re.compile(r"\$\s*\d+(?:,\d{3})*(?:\.\d{1,2})?")
 _TECHNICAL_PHRASE_RE = re.compile(
     r"(?i)\b(?:score|scoring|rank|ranking|keyword|keywords|match(?:es)?|embedding|embeddings|variable|analysis|algorithm)\b"
 )
@@ -143,6 +144,7 @@ def _clean_listing_text(value: Any, max_len: int = 1200) -> str:
     text = text.replace("\u00a0", " ")
     text = _NOISY_LABEL_RE.sub(" ", text)
     text = _DUP_CURRENCY_RE.sub(lambda m: m.group(1), text)
+    text = re.sub(r"(?i)(\$\s*\d+(?:,\d{3})*(?:\.\d{1,2})?)(?:\s*[,;:|/\-]?\s*\1)+", r"\1", text)
     text = re.sub(r"(?i)(\$ ?\d+(?:\.\d{1,2})?)(?=\$)", r"\1 ", text)
     text = re.sub(r"\s+", " ", text).strip(" -|,;:")
     if max_len > 0 and len(text) > max_len:
@@ -271,6 +273,38 @@ def _fallback_human_bullets(user_text: str, rec: dict[str, Any], safe_item: dict
     return [b1, b2, b3]
 
 
+def _enforce_single_price_mention(lines: list[str]) -> list[str]:
+    """Keep at most one currency mention across all explanation bullets."""
+    if not lines:
+        return lines
+    seen_price = False
+    out: list[str] = []
+    for line in lines:
+        text = str(line or "")
+        if not text:
+            continue
+
+        def _replace_price(match: re.Match[str]) -> str:
+            nonlocal seen_price
+            if not seen_price:
+                seen_price = True
+                return match.group(0)
+            return ""
+
+        text = _MONEY_RE.sub(_replace_price, text)
+        text = re.sub(r"\s+", " ", text)
+        text = re.sub(r"\s+([,.;:!?])", r"\1", text)
+        text = re.sub(r"([:;,])\s*([:;,])+", r"\1", text)
+        text = re.sub(r"(?i)\b(?:at|for|around|about|under|over|from|to|за|до|от|около)\s*([.?!])$", r"\1", text)
+        text = text.strip(" -|,;:")
+        if len(re.sub(r"[^A-Za-zА-Яа-я0-9]+", "", text)) < 6:
+            text = "Not specified in the listing."
+        if text and text[-1] not in ".!?":
+            text += "."
+        out.append(text or "Not specified in the listing.")
+    return out
+
+
 def _normalize_llm_human_output(obj: dict[str, Any], safe_catalog: list[dict[str, Any]], user_text: str) -> dict[str, Any]:
     safe_by_id = {str(row.get("id") or ""): row for row in safe_catalog}
     safe_by_title = {str(row.get("title") or "").strip().lower(): row for row in safe_catalog if str(row.get("title") or "").strip()}
@@ -310,7 +344,7 @@ def _normalize_llm_human_output(obj: dict[str, Any], safe_catalog: list[dict[str
                     break
                 if extra.lower() not in {b.lower() for b in clean_bullets}:
                     clean_bullets.append(extra)
-        rec["score_explanation"] = clean_bullets[:3]
+        rec["score_explanation"] = _enforce_single_price_mention(clean_bullets[:3])
 
         unknowns_raw = rec.get("unknowns")
         unknowns = [str(x).strip() for x in (unknowns_raw if isinstance(unknowns_raw, list) else []) if str(x).strip()]
