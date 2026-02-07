@@ -334,6 +334,8 @@ def _candidate_richness_score(product: dict) -> float:
     score = 0.0
     if _safe_price(product.get("price")) is not None:
         score += 1.0
+    if str(product.get("url") or "").strip():
+        score += 0.4
     desc = (product.get("description") or "").strip()
     if desc:
         score += min(1.5, len(desc) / 200.0)
@@ -1272,6 +1274,7 @@ def recommend_from_catalog(
             "id": rid,
             "title": str(p.get("title", "")),
             "price": numeric_price,
+            "url": str(p.get("url") or "").strip() or None,
             "category": str(p.get("category", "")),
             "score_explanation": _score_explanation_bullets(
                 p,

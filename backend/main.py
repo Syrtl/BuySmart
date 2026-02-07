@@ -259,6 +259,7 @@ def _sanitize_assistant_response(result: dict[str, Any] | None, products: list[d
                 "id": rid,
                 "title": str(rec.get("title") or product.get("title") or ""),
                 "price": _parse_price(rec.get("price")) if rec.get("price") is not None else _parse_price(product.get("price")),
+                "url": str(rec.get("url") or product.get("url") or "").strip() or None,
                 "category": str(rec.get("category") or product.get("category") or ""),
                 "score_explanation": bullets[:8],
                 "tco": tco,

@@ -383,6 +383,7 @@ def rank_products(
                 "id": row["id"],
                 "title": row["title"],
                 "price": row["price"],
+                "url": row["product"].get("url"),
                 "category": row["category"],
                 "score_explanation": score_lines,
                 "tco": {

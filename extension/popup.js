@@ -145,6 +145,21 @@ function normalizeTitleKey(value) {
   return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
+function buildUniqueTitleUrlMap(items) {
+  var map = {};
+  var counts = {};
+  (items || []).forEach(function (p) {
+    var key = normalizeTitleKey(p && p.title ? p.title : '');
+    if (!key) return;
+    counts[key] = (counts[key] || 0) + 1;
+    if (!map[key] && p && p.url) map[key] = String(p.url);
+  });
+  Object.keys(map).forEach(function (key) {
+    if ((counts[key] || 0) > 1) delete map[key];
+  });
+  return map;
+}
+
 function compactDisplayTitle(value) {
   var raw = String(value || '');
   if (!raw) return '';
@@ -199,10 +214,13 @@ function buildFallbackLink(title, store, scanOrigin) {
 
 function resolveItemUrl(item, urlMap, urlTitleMap, store, scanOrigin) {
   if (!item || typeof item !== 'object') return null;
+  var direct = String(item.url || '').trim();
+  if (direct) return direct;
   var id = String(item.id || '').trim();
   if (id && urlMap && urlMap[id]) return String(urlMap[id]);
   var titleKey = normalizeTitleKey(item.title || '');
   if (titleKey && urlTitleMap && urlTitleMap[titleKey]) return String(urlTitleMap[titleKey]);
+  if (String(store || '').toLowerCase() === 'page') return null;
   return buildFallbackLink(item.title || '', store, scanOrigin);
 }
 
@@ -255,7 +273,7 @@ function renderResults(items, urlMap, urlTitleMap, store, scanOrigin) {
       lastResultUrlById[id] = String(resolvedUrl);
     }
     var normalizedTitle = normalizeTitleKey(item.title || '');
-    if (normalizedTitle && resolvedUrl) {
+    if (normalizedTitle && resolvedUrl && !lastResultUrlByTitle[normalizedTitle]) {
       lastResultUrlByTitle[normalizedTitle] = String(resolvedUrl);
     }
     lastRenderedCards.push({
@@ -492,7 +510,9 @@ function applySessionState(session, opts) {
 
   var results = Array.isArray(session.results) ? session.results : [];
   var urlMap = (session.urlMap && typeof session.urlMap === 'object') ? session.urlMap : {};
-  var urlTitleMap = (session.urlTitleMap && typeof session.urlTitleMap === 'object') ? session.urlTitleMap : {};
+  var urlTitleMap = (session.urlTitleMap && typeof session.urlTitleMap === 'object')
+    ? session.urlTitleMap
+    : buildUniqueTitleUrlMap(pageCatalog);
   var renderStore = String(session.store || (storeEl ? storeEl.value : '') || '').toLowerCase();
   renderResults(results, urlMap, urlTitleMap, renderStore, lastScanOrigin);
   updateDebugInfo();
@@ -674,12 +694,10 @@ recommendBtn.addEventListener('click', async function () {
 
   try {
     var urlMap = {};
-    var urlTitleMap = {};
+    var urlTitleMap = buildUniqueTitleUrlMap(pageCatalog);
     var scanOrigin = lastScanOrigin || inferOriginFromCatalog(pageCatalog);
     pageCatalog.forEach(function (p) {
       if (p.id && p.url) urlMap[p.id] = p.url;
-      var tk = normalizeTitleKey(p.title || '');
-      if (tk && p.url) urlTitleMap[tk] = p.url;
     });
     var body = {
       user_text: userText,
