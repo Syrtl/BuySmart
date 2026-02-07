@@ -51,35 +51,42 @@
 html {
   width: 570px;
   min-height: 320px;
+  margin: 0;
+  padding: 0;
   border-radius: 20px;
   overflow: hidden;
+  background: transparent;
+  clip-path: inset(0 round 20px);
 }
 
 body {
-  width: 570px;
+  width: 100%;
   min-height: 320px;
   margin: 0;
-  padding: 8px;
+  padding: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
   font-size: 13px;
   line-height: 1.45;
   color: var(--text);
-  background:
-    radial-gradient(150% 110% at 100% -30%, rgba(30, 64, 175, 0.08), transparent 55%),
-    radial-gradient(130% 120% at -20% 110%, rgba(100, 116, 139, 0.1), transparent 50%),
-    var(--bg);
   border-radius: 20px;
-  border: 1px solid rgba(148, 163, 184, 0.32);
-  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.16);
   overflow: hidden;
+  background: transparent;
+  clip-path: inset(0 round 20px);
 }
 
 .container {
+  width: 100%;
+  min-height: 320px;
   padding: 16px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.72);
+  border-radius: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.16);
+  background:
+    radial-gradient(150% 110% at 100% -30%, rgba(30, 64, 175, 0.08), transparent 55%),
+    radial-gradient(130% 120% at -20% 110%, rgba(100, 116, 139, 0.1), transparent 50%),
+    rgba(255, 255, 255, 0.72);
   backdrop-filter: blur(6px);
-  min-height: calc(320px - 16px);
+  overflow: hidden;
 }
 
 [data-theme="dark"] .container {
