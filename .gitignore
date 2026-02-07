@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 .DS_Store
+backend/data/price_history_cache.json
 
 # C extensions
 *.so

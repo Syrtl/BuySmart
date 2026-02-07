@@ -189,6 +189,12 @@ Server runs at **http://localhost:8000**. Docs: http://localhost:8000/docs
   - Body: `{ "user_text": string, "store": "amazon"|"grainger", "k": number }`
   - Response: list of `{ id, title, price, category, score, why }`
 
+- **GET /api/price-history**
+  - Query: `productId=XXX&days=90` (optional: `currentPrice=123.45`)
+  - Response: `{ productId, currency, days, points[90], min, max, current, lastUpdated, source }`
+
+Price history is mock-generated & cached for demo; consistent for 24 hours.
+
 ## Tech stack
 
 - Backend: FastAPI, sentence-transformers, scikit-learn, Pydantic

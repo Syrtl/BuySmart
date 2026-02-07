@@ -8,13 +8,14 @@ import time
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from backend.services.recommender import embeddings_enabled, parse_intent, recommend
 from backend.services.explain import build_why
 from backend.services.llm_recommender import recommend_via_llm, recommend_from_catalog
+from backend.services.price_history import PriceHistoryResponse, get_price_history
 
 app = FastAPI(title="ProcureWise API", version="0.1.0")
 
@@ -288,12 +289,38 @@ def startup():
 
 @app.get("/")
 def root():
-    return {"service": "ProcureWise API", "docs": "/docs", "health": "/health", "recommend": "POST /recommend", "assistant": "POST /assistant/recommend"}
+    return {
+        "service": "ProcureWise API",
+        "docs": "/docs",
+        "health": "/health",
+        "recommend": "POST /recommend",
+        "assistant": "POST /assistant/recommend",
+        "price_history": "GET /api/price-history?productId=XXX&days=90",
+    }
 
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/api/price-history", response_model=PriceHistoryResponse)
+def price_history_endpoint(
+    product_id: str | None = Query(None, alias="productId"),
+    days: int = Query(90, ge=1, le=365),
+    current_price: float | None = Query(None, alias="currentPrice"),
+):
+    normalized_product_id = str(product_id or "").strip()
+    if not normalized_product_id:
+        raise HTTPException(status_code=400, detail="Missing required query parameter: productId")
+    _load_catalogs()
+    return get_price_history(
+        data_dir=DATA_DIR,
+        catalogs=CATALOGS,
+        product_id=normalized_product_id,
+        days=days,
+        current_price_hint=current_price,
+    )
 
 
 def _product_to_item(product: dict, score: float, why: str) -> RecommendItem:

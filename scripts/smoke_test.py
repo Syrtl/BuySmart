@@ -23,6 +23,10 @@ TIMEOUT_RECOMMEND = 30
 FIXTURE_PATH = Path(__file__).resolve().parent / "page_catalog_override_fixture.json"
 
 
+def safe_preview(value):
+    return str(value or "").replace("\n", " ").strip()[:200]
+
+
 def _post(path, body, timeout=None):
     t = timeout if timeout is not None else TIMEOUT
     req = Request(
@@ -43,6 +47,26 @@ def _post_with_status(path, body, timeout=None):
         headers={"Content-Type": "application/json"},
         method="POST",
     )
+    try:
+        r = urlopen(req, timeout=t)
+        raw = r.read().decode()
+        try:
+            data = json.loads(raw) if raw else {}
+        except Exception:
+            data = None
+        return r.getcode(), data, raw
+    except HTTPError as e:
+        raw = e.read().decode(errors="replace")
+        try:
+            data = json.loads(raw) if raw else {}
+        except Exception:
+            data = None
+        return e.code, data, raw
+
+
+def _get_with_status(path, timeout=None):
+    t = timeout if timeout is not None else TIMEOUT
+    req = Request(BASE + path, method="GET")
     try:
         r = urlopen(req, timeout=t)
         raw = r.read().decode()
@@ -94,6 +118,35 @@ def main():
         return 1
 
     failed = 0
+
+    # 0) /api/price-history for 90 days: 200, 90 points, required fields, and cache source on repeated call
+    try:
+        status1, data1, raw1 = _get_with_status("/api/price-history?productId=demo-asin-1&days=90&currentPrice=199.99", timeout=TIMEOUT)
+        status2, data2, raw2 = _get_with_status("/api/price-history?productId=demo-asin-1&days=90&currentPrice=199.99", timeout=TIMEOUT)
+        if status1 != 200:
+            print("FAIL: /api/price-history first call — expected 200, got", status1, safe_preview(raw1))
+            failed += 1
+        elif status2 != 200:
+            print("FAIL: /api/price-history second call — expected 200, got", status2, safe_preview(raw2))
+            failed += 1
+        else:
+            points = (data1 or {}).get("points") or []
+            required = ("productId", "currency", "days", "points", "min", "max", "current", "lastUpdated", "source")
+            missing_fields = [k for k in required if k not in (data1 or {})]
+            if missing_fields:
+                print("FAIL: /api/price-history — missing fields:", missing_fields)
+                failed += 1
+            elif len(points) != 90:
+                print("FAIL: /api/price-history — expected 90 points, got", len(points))
+                failed += 1
+            elif (data2 or {}).get("source") != "cached":
+                print("FAIL: /api/price-history — expected second call source='cached', got", (data2 or {}).get("source"))
+                failed += 1
+            else:
+                print("PASS: /api/price-history — returns 90-day series and cached replay")
+    except Exception as e:
+        print("FAIL: /api/price-history —", e)
+        failed += 1
 
     # 1) /assistant/recommend "office chair under $150": at least one result contains "chair" (even if over budget); over-budget chair has "Over budget" in score_explanation
     try:

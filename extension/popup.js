@@ -1,3 +1,18 @@
+/**
+ * @typedef {{date: string, price: number}} PricePoint
+ * @typedef {{
+ *   productId: string,
+ *   currency: string,
+ *   days: number,
+ *   points: PricePoint[],
+ *   min: number,
+ *   max: number,
+ *   current: number,
+ *   lastUpdated: string,
+ *   source: 'mock'|'cached'
+ * }} PriceHistoryResponse
+ */
+
 const STORAGE_KEY_API_BASE = 'procurewise_api_base';
 const STORAGE_KEY_PAGE_CATALOG = 'procurewise_page_catalog';
 const STORAGE_KEY_LAST_SESSION = 'procurewise_last_session';
@@ -18,6 +33,12 @@ const scanPageBtn = document.getElementById('scanPage');
 const scanStatusEl = document.getElementById('scanStatus');
 const clearCatalogLink = document.getElementById('clearCatalog');
 const clearSessionLink = document.getElementById('clearSession');
+const historyProductIdEl = document.getElementById('historyProductId');
+const loadPriceHistoryBtn = document.getElementById('loadPriceHistory');
+const priceHistoryStatusEl = document.getElementById('priceHistoryStatus');
+const priceHistoryStatsEl = document.getElementById('priceHistoryStats');
+const priceHistoryChartWrapEl = document.getElementById('priceHistoryChartWrap');
+const priceHistoryChartEl = document.getElementById('priceHistoryChart');
 
 let pageCatalog = [];
 let lastRequestDurationMs = null;
@@ -26,6 +47,8 @@ let lastOverrideUsed = null;
 let lastAssistantMode = null;
 let sessionPollTimer = null;
 let lastScanOrigin = '';
+let lastResultPriceById = {};
+let lastAutoHistoryKey = '';
 
 function getApiBase() {
   const v = (apiBaseEl && apiBaseEl.value && apiBaseEl.value.trim()) || '';
@@ -116,6 +139,10 @@ function friendlyErrorMessage(err) {
   return msg;
 }
 
+function safePreview(text) {
+  return String(text || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+}
+
 function normalizeTitleKey(value) {
   return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
@@ -183,6 +210,7 @@ function resolveItemUrl(item, urlMap, urlTitleMap, store, scanOrigin) {
 
 function renderResults(items, urlMap, urlTitleMap, store, scanOrigin) {
   resultsEl.innerHTML = '';
+  lastResultPriceById = {};
   if (!items || items.length === 0) {
     resultsEl.innerHTML = '<li class="empty">No recommendations. Try a different query or store.</li>';
     return;
@@ -192,6 +220,11 @@ function renderResults(items, urlMap, urlTitleMap, store, scanOrigin) {
   store = (store || '').toLowerCase();
   scanOrigin = scanOrigin || '';
   items.forEach(function (item) {
+    var id = String(item.id || '').trim();
+    if (id) {
+      var maybePrice = parseNumericPrice(item.price);
+      if (maybePrice != null) lastResultPriceById[id] = maybePrice;
+    }
     const li = document.createElement('li');
     const title = escapeHtml(compactDisplayTitle(item.title || '') || (item.title || ''));
     const resolvedUrl = resolveItemUrl(item, urlMap, urlTitleMap, store, scanOrigin);
@@ -220,6 +253,187 @@ function escapeHtml(s) {
   const div = document.createElement('div');
   div.textContent = s;
   return div.innerHTML;
+}
+
+function showHistoryStatus(message, type) {
+  if (!priceHistoryStatusEl) return;
+  priceHistoryStatusEl.textContent = message || '';
+  priceHistoryStatusEl.className = 'history-status ' + (type || '');
+  priceHistoryStatusEl.classList.remove('hidden');
+}
+
+function hideHistoryStatus() {
+  if (!priceHistoryStatusEl) return;
+  priceHistoryStatusEl.classList.add('hidden');
+}
+
+function setHistoryStats(text) {
+  if (!priceHistoryStatsEl) return;
+  if (!text) {
+    priceHistoryStatsEl.textContent = '';
+    priceHistoryStatsEl.classList.add('hidden');
+    return;
+  }
+  priceHistoryStatsEl.textContent = text;
+  priceHistoryStatsEl.classList.remove('hidden');
+}
+
+function formatMoney(value, currency) {
+  var n = Number(value);
+  if (!isFinite(n)) return '—';
+  var code = currency || 'USD';
+  try {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: code, maximumFractionDigits: 2 }).format(n);
+  } catch (_) {
+    return '$' + n.toFixed(2);
+  }
+}
+
+function renderPriceHistoryChart(points) {
+  if (!priceHistoryChartEl || !priceHistoryChartWrapEl) return;
+  if (!Array.isArray(points) || points.length === 0) {
+    priceHistoryChartEl.innerHTML = '';
+    priceHistoryChartWrapEl.classList.add('hidden');
+    return;
+  }
+
+  var width = 360;
+  var height = 140;
+  var padX = 16;
+  var padY = 14;
+  var innerW = width - (padX * 2);
+  var innerH = height - (padY * 2);
+  var prices = points.map(function (p) { return Number(p.price); }).filter(function (n) { return isFinite(n); });
+  if (prices.length === 0) {
+    priceHistoryChartEl.innerHTML = '';
+    priceHistoryChartWrapEl.classList.add('hidden');
+    return;
+  }
+  var min = Math.min.apply(null, prices);
+  var max = Math.max.apply(null, prices);
+  var range = Math.max(0.01, max - min);
+
+  function xAt(i) {
+    if (prices.length <= 1) return padX;
+    return padX + ((innerW * i) / (prices.length - 1));
+  }
+  function yAt(v) {
+    var t = (Number(v) - min) / range;
+    return (height - padY) - (t * innerH);
+  }
+
+  var pointPairs = [];
+  for (var i = 0; i < prices.length; i++) {
+    pointPairs.push(xAt(i).toFixed(2) + ',' + yAt(prices[i]).toFixed(2));
+  }
+  var polyline = pointPairs.join(' ');
+  var lastX = xAt(prices.length - 1).toFixed(2);
+  var lastY = yAt(prices[prices.length - 1]).toFixed(2);
+
+  priceHistoryChartEl.innerHTML = [
+    '<line x1="' + padX + '" y1="' + (height - padY) + '" x2="' + (width - padX) + '" y2="' + (height - padY) + '" stroke="#d7dce5" stroke-width="1"/>',
+    '<line x1="' + padX + '" y1="' + padY + '" x2="' + padX + '" y2="' + (height - padY) + '" stroke="#d7dce5" stroke-width="1"/>',
+    '<polyline fill="none" stroke="#0d47a1" stroke-width="2" points="' + polyline + '"/>',
+    '<circle cx="' + lastX + '" cy="' + lastY + '" r="3" fill="#1565c0"/>'
+  ].join('');
+  priceHistoryChartWrapEl.classList.remove('hidden');
+}
+
+function localMockPriceHistory(productId, days, currentPrice) {
+  var nDays = Math.max(1, Number(days || 90));
+  var base = Number(currentPrice);
+  if (!isFinite(base) || base <= 0) base = 100;
+  var floor = Math.max(1, base * 0.75);
+  var ceil = Math.max(floor + 0.01, base * 1.25);
+  var seed = 0;
+  var text = String(productId || '') + '|' + String(nDays) + '|' + String(base.toFixed ? base.toFixed(2) : base);
+  for (var i = 0; i < text.length; i++) {
+    seed = ((seed * 31) + text.charCodeAt(i)) >>> 0;
+  }
+  function rand() {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 4294967296;
+  }
+  var value = Math.max(floor, Math.min(ceil, base * (0.95 + (rand() * 0.1))));
+  var points = [];
+  var now = new Date();
+  for (var d = nDays - 1; d >= 0; d--) {
+    var dt = new Date(now);
+    dt.setDate(now.getDate() - d);
+    var revert = (base - value) * 0.1;
+    var noise = ((rand() * 2) - 1) * (base * 0.012);
+    var spike = rand() < 0.05 ? (((rand() * 2) - 1) * (base * 0.04)) : 0;
+    value = Math.max(floor, Math.min(ceil, value + revert + noise + spike));
+    points.push({
+      date: dt.toISOString().slice(0, 10),
+      price: Number(value.toFixed(2))
+    });
+  }
+  return points;
+}
+
+function renderPriceHistoryResponse(data) {
+  if (!data || !Array.isArray(data.points)) return;
+  renderPriceHistoryChart(data.points);
+  var stats = [
+    'Current: ' + formatMoney(data.current, data.currency),
+    'Min: ' + formatMoney(data.min, data.currency),
+    'Max: ' + formatMoney(data.max, data.currency),
+    'Source: ' + String(data.source || 'mock')
+  ].join(' · ');
+  setHistoryStats(stats);
+}
+
+function lookupResultPrice(productId) {
+  if (!productId) return null;
+  if (Object.prototype.hasOwnProperty.call(lastResultPriceById, productId)) {
+    return lastResultPriceById[productId];
+  }
+  return null;
+}
+
+async function loadPriceHistory(productId, currentPrice) {
+  var id = String(productId || '').trim();
+  if (!id) {
+    showHistoryStatus('Enter product ID first.', 'error');
+    return;
+  }
+  if (loadPriceHistoryBtn) loadPriceHistoryBtn.disabled = true;
+  showHistoryStatus('Loading price history…', 'loading');
+  try {
+    var apiBase = getApiBase();
+    var url = apiBase + '/api/price-history?productId=' + encodeURIComponent(id) + '&days=90';
+    var priceHint = currentPrice;
+    if (priceHint == null) priceHint = lookupResultPrice(id);
+    if (priceHint != null && isFinite(Number(priceHint))) {
+      url += '&currentPrice=' + encodeURIComponent(String(Number(priceHint)));
+    }
+    var res = await fetchWithTimeout(url, { method: 'GET' }, 10000);
+    if (!res.ok) {
+      var raw = await res.text();
+      throw new Error('Price history unavailable (HTTP ' + res.status + '): ' + safePreview(raw));
+    }
+    /** @type {PriceHistoryResponse} */
+    var data = await res.json();
+    renderPriceHistoryResponse(data);
+    showHistoryStatus('Updated for ' + id + '.', '');
+  } catch (e) {
+    var fallbackPoints = localMockPriceHistory(id, 90, currentPrice);
+    renderPriceHistoryResponse({
+      productId: id,
+      currency: 'USD',
+      days: 90,
+      points: fallbackPoints,
+      min: Math.min.apply(null, fallbackPoints.map(function (p) { return p.price; })),
+      max: Math.max.apply(null, fallbackPoints.map(function (p) { return p.price; })),
+      current: fallbackPoints[fallbackPoints.length - 1].price,
+      lastUpdated: new Date().toISOString(),
+      source: 'mock'
+    });
+    showHistoryStatus('Server unavailable. Showing local demo history.', 'error');
+  } finally {
+    if (loadPriceHistoryBtn) loadPriceHistoryBtn.disabled = false;
+  }
 }
 
 function fetchWithTimeout(url, options, timeoutMs) {
@@ -299,6 +513,17 @@ function applySessionState(session, opts) {
   var urlTitleMap = (session.urlTitleMap && typeof session.urlTitleMap === 'object') ? session.urlTitleMap : {};
   var renderStore = String(session.store || (storeEl ? storeEl.value : '') || '').toLowerCase();
   renderResults(results, urlMap, urlTitleMap, renderStore, lastScanOrigin);
+  if (!session.pending && Array.isArray(results) && results.length > 0) {
+    var top = results[0] || {};
+    var topId = String(top.id || '').trim();
+    var topPrice = parseNumericPrice(top.price);
+    if (historyProductIdEl && topId) historyProductIdEl.value = topId;
+    var key = topId + ':' + String(topPrice != null ? topPrice : '');
+    if (topId && key !== lastAutoHistoryKey) {
+      lastAutoHistoryKey = key;
+      loadPriceHistory(topId, topPrice);
+    }
+  }
   updateDebugInfo();
 }
 
@@ -368,6 +593,7 @@ function buildCatalogOverridePayload() {
 function setButtonsDisabled(disabled) {
   recommendBtn.disabled = disabled;
   if (scanPageBtn) scanPageBtn.disabled = disabled;
+  if (loadPriceHistoryBtn) loadPriceHistoryBtn.disabled = disabled;
   var tc = document.getElementById('testConnection');
   if (tc) tc.disabled = disabled;
   var dp = document.getElementById('demoPreset');
@@ -516,9 +742,20 @@ if (testConnectionBtn) {
   });
 }
 
+if (loadPriceHistoryBtn) {
+  loadPriceHistoryBtn.addEventListener('click', async function () {
+    var id = historyProductIdEl ? historyProductIdEl.value : '';
+    var price = lookupResultPrice(String(id || '').trim());
+    await loadPriceHistory(id, price);
+  });
+}
+
 document.addEventListener('DOMContentLoaded', async function () {
   loadSavedApiBase();
   loadPageCatalog();
+  hideHistoryStatus();
+  setHistoryStats('');
+  renderPriceHistoryChart([]);
   var session = await loadLastSession();
   if (session) {
     applySessionState(session, { restoreInput: true });
@@ -612,7 +849,13 @@ if (clearSessionLink) {
     lastHttpStatus = null;
     lastOverrideUsed = null;
     lastAssistantMode = null;
+    lastResultPriceById = {};
+    lastAutoHistoryKey = '';
     if (queryEl) queryEl.value = '';
+    if (historyProductIdEl) historyProductIdEl.value = '';
+    hideHistoryStatus();
+    setHistoryStats('');
+    renderPriceHistoryChart([]);
     renderResults([], {}, {}, (storeEl && storeEl.value) ? String(storeEl.value).toLowerCase() : '', lastScanOrigin);
     hideStatus();
     updateDebugInfo();
