@@ -193,12 +193,12 @@ Server runs at **http://localhost:8000**. Docs: http://localhost:8000/docs
   - Query: `productId=XXX&weeks=13` (optional: `currentPrice=123.45`; `days=90` still supported)
   - Response: `{ productId, currency, weeks, points[13], min, max, current, lastUpdated, source }`
 
-- **GET /api/best-time-to-buy**
+- **GET /api/buy-timing**
   - Query: `productId=XXX` (optional: `currentPrice`, `title`, `category`)
-  - Response: `{ productId, recommendation, confidence, currentPrice, low30, low90, deltaFromLow30Pct, deltaFromLow90Pct, trend, nextDealWindow, explanation }`
+  - Response: `{ productId, currency, bestWindow, worstWindow, nextBestWindowThisYear, explanation, confidence }`
 
 Price history is mock-generated & cached for demo; consistent for 24 hours.
-Best-time-to-buy is heuristic and category-calendar based for demo purposes; it is not a guarantee of future pricing.
+Buy-timing is heuristic and category-calendar based for demo purposes; it is not a guarantee of future pricing.
 
 ## Tech stack
 

@@ -151,7 +151,32 @@ def main():
         print("FAIL: /api/price-history —", e)
         failed += 1
 
-    # 0b) backward compatibility: days=90 should still return weekly payload
+    # 0b) 2-year weekly mode: 104 points, response remains stable via cache
+    try:
+        status1, data1, raw1 = _get_with_status("/api/price-history?productId=demo-asin-104&weeks=104&currentPrice=319.99", timeout=TIMEOUT)
+        status2, data2, raw2 = _get_with_status("/api/price-history?productId=demo-asin-104&weeks=104&currentPrice=319.99", timeout=TIMEOUT)
+        if status1 != 200:
+            print("FAIL: /api/price-history weeks=104 first call — expected 200, got", status1, safe_preview(raw1))
+            failed += 1
+        elif status2 != 200:
+            print("FAIL: /api/price-history weeks=104 second call — expected 200, got", status2, safe_preview(raw2))
+            failed += 1
+        elif (data1 or {}).get("weeks") != 104:
+            print("FAIL: /api/price-history weeks=104 — expected weeks=104, got", (data1 or {}).get("weeks"))
+            failed += 1
+        elif len((data1 or {}).get("points") or []) != 104:
+            print("FAIL: /api/price-history weeks=104 — expected 104 points")
+            failed += 1
+        elif (data2 or {}).get("source") != "cached":
+            print("FAIL: /api/price-history weeks=104 — expected second call source='cached', got", (data2 or {}).get("source"))
+            failed += 1
+        else:
+            print("PASS: /api/price-history weeks=104 — returns 2-year series and cached replay")
+    except Exception as e:
+        print("FAIL: /api/price-history weeks=104 —", e)
+        failed += 1
+
+    # 0c) backward compatibility: days=90 should still return weekly payload
     try:
         status, data, raw = _get_with_status("/api/price-history?productId=demo-asin-2&days=90&currentPrice=129.99", timeout=TIMEOUT)
         if status != 200:
@@ -169,51 +194,49 @@ def main():
         print("FAIL: /api/price-history days=90 compatibility —", e)
         failed += 1
 
-    # 0c) /api/best-time-to-buy returns expected structure and enums
+    # 0d) /api/buy-timing returns expected structure
     try:
-        status, data, raw = _get_with_status("/api/best-time-to-buy?productId=demo-asin-3&currentPrice=219.99&title=Gaming%20Monitor", timeout=TIMEOUT)
+        status, data, raw = _get_with_status("/api/buy-timing?productId=demo-asin-3&currentPrice=219.99&title=Gaming%20Monitor", timeout=TIMEOUT)
         if status != 200:
-            print("FAIL: /api/best-time-to-buy — expected 200, got", status, safe_preview(raw))
+            print("FAIL: /api/buy-timing — expected 200, got", status, safe_preview(raw))
             failed += 1
         else:
             required = (
                 "productId",
-                "recommendation",
-                "confidence",
-                "currentPrice",
-                "low30",
-                "low90",
-                "deltaFromLow30Pct",
-                "deltaFromLow90Pct",
-                "trend",
-                "nextDealWindow",
+                "currency",
+                "bestWindow",
+                "worstWindow",
+                "nextBestWindowThisYear",
                 "explanation",
+                "confidence",
             )
             missing = [k for k in required if k not in (data or {})]
             if missing:
-                print("FAIL: /api/best-time-to-buy — missing fields:", missing)
-                failed += 1
-            elif (data or {}).get("recommendation") not in {"buy_now", "wait"}:
-                print("FAIL: /api/best-time-to-buy — invalid recommendation:", (data or {}).get("recommendation"))
+                print("FAIL: /api/buy-timing — missing fields:", missing)
                 failed += 1
             elif (data or {}).get("confidence") not in {"low", "medium", "high"}:
-                print("FAIL: /api/best-time-to-buy — invalid confidence:", (data or {}).get("confidence"))
-                failed += 1
-            elif (data or {}).get("trend") not in {"down", "flat", "up"}:
-                print("FAIL: /api/best-time-to-buy — invalid trend:", (data or {}).get("trend"))
+                print("FAIL: /api/buy-timing — invalid confidence:", (data or {}).get("confidence"))
                 failed += 1
             elif not isinstance((data or {}).get("explanation"), list):
-                print("FAIL: /api/best-time-to-buy — explanation is not a list")
+                print("FAIL: /api/buy-timing — explanation is not a list")
                 failed += 1
             else:
-                deal = (data or {}).get("nextDealWindow") or {}
-                if "name" not in deal or "approxDateRange" not in deal or "expectedDiscountRangePct" not in deal:
-                    print("FAIL: /api/best-time-to-buy — invalid nextDealWindow payload:", deal)
+                best = (data or {}).get("bestWindow") or {}
+                worst = (data or {}).get("worstWindow") or {}
+                nxt = (data or {}).get("nextBestWindowThisYear") or {}
+                if "name" not in best or "typicalDropPctRange" not in best or "avgDiscountPct" not in best:
+                    print("FAIL: /api/buy-timing — invalid bestWindow payload:", best)
+                    failed += 1
+                elif "name" not in worst or "typicalIncreasePctRange" not in worst or "avgPremiumPct" not in worst:
+                    print("FAIL: /api/buy-timing — invalid worstWindow payload:", worst)
+                    failed += 1
+                elif "name" not in nxt or "startDate" not in nxt or "endDate" not in nxt or "daysUntilStart" not in nxt:
+                    print("FAIL: /api/buy-timing — invalid nextBestWindowThisYear payload:", nxt)
                     failed += 1
                 else:
-                    print("PASS: /api/best-time-to-buy — heuristic payload returned")
+                    print("PASS: /api/buy-timing — heuristic payload returned")
     except Exception as e:
-        print("FAIL: /api/best-time-to-buy —", e)
+        print("FAIL: /api/buy-timing —", e)
         failed += 1
 
     # 1) /assistant/recommend "office chair under $150": at least one result contains "chair" (even if over budget); over-budget chair has "Over budget" in score_explanation
