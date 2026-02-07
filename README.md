@@ -197,8 +197,13 @@ Server runs at **http://localhost:8000**. Docs: http://localhost:8000/docs
   - Query: `productId=XXX` (optional: `currentPrice`, `title`, `category`)
   - Response: `{ productId, currency, bestWindow, worstWindow, nextBestWindowThisYear, explanation, confidence }`
 
+- **GET /api/value-chart**
+  - Query: `productId=XXX` (optional: `currentPrice`, `title`, `category`, `rating`, `reviewCount`)
+  - Response: `{ productId, currency, points[], optimalId, frontierIds[], explanation[] }`
+
 Price history is mock-generated & cached for demo; consistent for 24 hours.
 Buy-timing is heuristic and category-calendar based for demo purposes; it is not a guarantee of future pricing.
+Price-vs-quality chart uses page/catalog comparables and an explainable heuristic (rating x log10(reviews+1), normalized); it is also not a guarantee.
 
 ## Tech stack
 

@@ -239,6 +239,44 @@ def main():
         print("FAIL: /api/buy-timing —", e)
         failed += 1
 
+    # 0e) /api/value-chart returns points + optimal/frontier ids
+    try:
+        status, data, raw = _get_with_status("/api/value-chart?productId=demo-asin-3&currentPrice=219.99&title=Gaming%20Monitor", timeout=TIMEOUT)
+        if status != 200:
+            print("FAIL: /api/value-chart — expected 200, got", status, safe_preview(raw))
+            failed += 1
+        else:
+            required = ("productId", "currency", "points", "optimalId", "frontierIds", "explanation")
+            missing = [k for k in required if k not in (data or {})]
+            if missing:
+                print("FAIL: /api/value-chart — missing fields:", missing)
+                failed += 1
+            elif not isinstance((data or {}).get("points"), list) or len((data or {}).get("points") or []) < 1:
+                print("FAIL: /api/value-chart — points missing or empty")
+                failed += 1
+            else:
+                points = (data or {}).get("points") or []
+                point_ids = {str(p.get("id", "")) for p in points if isinstance(p, dict)}
+                optimal_id = str((data or {}).get("optimalId") or "")
+                frontier_ids = [str(x) for x in ((data or {}).get("frontierIds") or [])]
+                first_point = points[0] if points else {}
+                point_fields = ("id", "title", "price", "rating", "reviewCount", "quality", "qualityRaw", "valueScore")
+                missing_point_fields = [k for k in point_fields if k not in (first_point or {})]
+                if missing_point_fields:
+                    print("FAIL: /api/value-chart — point missing fields:", missing_point_fields)
+                    failed += 1
+                elif optimal_id not in point_ids:
+                    print("FAIL: /api/value-chart — optimalId not found in points:", optimal_id)
+                    failed += 1
+                elif not set(frontier_ids).issubset(point_ids):
+                    print("FAIL: /api/value-chart — frontierIds contain unknown ids:", frontier_ids)
+                    failed += 1
+                else:
+                    print("PASS: /api/value-chart — value chart payload returned")
+    except Exception as e:
+        print("FAIL: /api/value-chart —", e)
+        failed += 1
+
     # 1) /assistant/recommend "office chair under $150": at least one result contains "chair" (even if over budget); over-budget chair has "Over budget" in score_explanation
     try:
         data = _post("/assistant/recommend", {"user_text": "office chair under $150", "store": "amazon", "k": 5}, timeout=TIMEOUT_RECOMMEND)

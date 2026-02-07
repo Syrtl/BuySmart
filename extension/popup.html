@@ -64,8 +64,25 @@
       <div id="timingModalBody" class="timing-modal-body hidden"></div>
     </div>
   </div>
+  <div id="valueChartModal" class="value-modal hidden">
+    <div class="value-modal-backdrop" data-close="1"></div>
+    <div class="value-modal-panel" role="dialog" aria-modal="true" aria-labelledby="valueChartModalTitle">
+      <div class="value-modal-header">
+        <h2 id="valueChartModalTitle">Price vs Quality (Best Value)</h2>
+        <button type="button" id="valueChartModalClose" class="modal-close-btn" aria-label="Close">×</button>
+      </div>
+      <p id="valueChartModalProduct" class="value-modal-product hidden"></p>
+      <p id="valueChartModalStatus" class="value-modal-status hidden"></p>
+      <div id="valueChartModalChartWrap" class="value-modal-chart-wrap hidden">
+        <svg id="valueChartModalChart" viewBox="0 0 620 260" preserveAspectRatio="none"></svg>
+        <div id="valueChartModalTooltip" class="value-modal-tooltip hidden"></div>
+      </div>
+      <div id="valueChartModalBody" class="value-modal-body hidden"></div>
+    </div>
+  </div>
   <script src="priceHistoryModal.js"></script>
   <script src="buyTimingModal.js"></script>
+  <script src="valueChartModal.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

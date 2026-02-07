@@ -17,6 +17,7 @@ from backend.services.explain import build_why
 from backend.services.llm_recommender import recommend_via_llm, recommend_from_catalog
 from backend.services.price_history import PriceHistoryResponse, get_price_history
 from backend.services.buy_timing import BuyTimingResponse, analyze_buy_timing
+from backend.services.value_chart import ValueChartResponse, build_value_chart
 
 app = FastAPI(title="ProcureWise API", version="0.1.0")
 
@@ -298,6 +299,7 @@ def root():
         "assistant": "POST /assistant/recommend",
         "price_history": "GET /api/price-history?productId=XXX&weeks=13",
         "buy_timing": "GET /api/buy-timing?productId=XXX",
+        "value_chart": "GET /api/value-chart?productId=XXX",
     }
 
 
@@ -354,6 +356,30 @@ def buy_timing_endpoint(
         current_price_hint=current_price,
         title_hint=title,
         category_hint=category,
+    )
+
+
+@app.get("/api/value-chart", response_model=ValueChartResponse)
+def value_chart_endpoint(
+    product_id: str | None = Query(None, alias="productId"),
+    current_price: float | None = Query(None, alias="currentPrice"),
+    title: str | None = Query(None),
+    category: str | None = Query(None),
+    rating: float | None = Query(None),
+    review_count: int | None = Query(None, alias="reviewCount"),
+):
+    normalized_product_id = str(product_id or "").strip()
+    if not normalized_product_id:
+        raise HTTPException(status_code=400, detail="Missing required query parameter: productId")
+    _load_catalogs()
+    return build_value_chart(
+        product_id=normalized_product_id,
+        catalogs=CATALOGS,
+        current_price_hint=current_price,
+        title_hint=title,
+        category_hint=category,
+        rating_hint=rating,
+        review_count_hint=review_count,
     )
 
 

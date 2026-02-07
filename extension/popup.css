@@ -554,6 +554,129 @@ button.secondary:hover {
   color: #4b5563;
 }
 
+.value-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+}
+
+.value-modal.hidden {
+  display: none;
+}
+
+.value-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.value-modal-panel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(700px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid #dbe3f1;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.3);
+  padding: 14px;
+}
+
+.value-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.value-modal-header h2 {
+  margin: 0;
+  font-size: 15px;
+  color: #0d47a1;
+}
+
+.value-modal-product {
+  margin: 0 0 8px 0;
+  font-size: 12px;
+  color: #4b5563;
+}
+
+.value-modal-status {
+  margin: 0 0 8px 0;
+  font-size: 12px;
+  color: #666;
+}
+
+.value-modal-status.loading {
+  color: #1565c0;
+}
+
+.value-modal-status.error {
+  color: #c62828;
+}
+
+.value-modal-status.hidden,
+.value-modal-product.hidden,
+.value-modal-body.hidden,
+.value-modal-chart-wrap.hidden {
+  display: none;
+}
+
+.value-modal-chart-wrap {
+  margin-top: 8px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #fafcff;
+  height: 260px;
+  overflow: hidden;
+  position: relative;
+}
+
+#valueChartModalChart {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.value-modal-body {
+  margin-top: 8px;
+}
+
+.value-modal-stat {
+  margin: 6px 0;
+  font-size: 12px;
+  color: #374151;
+}
+
+.value-modal-explanation {
+  margin: 8px 0 0 16px;
+  padding: 0;
+  font-size: 11px;
+  color: #4b5563;
+}
+
+.value-modal-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: rgba(13, 71, 161, 0.96);
+  color: #fff;
+  font-size: 10px;
+  line-height: 1.3;
+  border-radius: 5px;
+  padding: 5px 6px;
+  max-width: 240px;
+  transform: translate(-50%, calc(-100% - 8px));
+  white-space: nowrap;
+}
+
+.value-modal-tooltip.hidden {
+  display: none;
+}
+
 @media (max-width: 560px) {
   .timing-grid {
     grid-template-columns: 1fr;
