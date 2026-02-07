@@ -1,0 +1,22 @@
+[
+  {"id": "g1", "title": "Industrial Office Chair Heavy Duty", "description": "Commercial-grade swivel chair. 300 lb capacity, reinforced base. Meets BIFMA standards.", "price": 249.00, "category": "furniture", "quality_score": 0.90, "lifespan_years": 12},
+  {"id": "g2", "title": "Safety Glasses Clear", "description": "ANSI Z87.1 compliant. Anti-fog, scratch resistant. Wraparound design.", "price": 8.99, "category": "safety", "quality_score": 0.82, "lifespan_years": 2},
+  {"id": "g3", "title": "Work Gloves Leather", "description": "Driver-style leather gloves. Reinforced palm. Sizes S–XL.", "price": 18.50, "category": "safety", "quality_score": 0.79, "lifespan_years": 1},
+  {"id": "g4", "title": "Heavy-Duty Shelving Unit", "description": "Steel shelving 72\" H, 48\" W. 2000 lb capacity per level. Boltless assembly.", "price": 189.00, "category": "storage", "quality_score": 0.88, "lifespan_years": 15},
+  {"id": "g5", "title": "Cordless Drill 20V", "description": "Brushless motor, 1/2\" chuck. Two batteries and charger included. Kit case.", "price": 199.00, "category": "tools", "quality_score": 0.85, "lifespan_years": 8},
+  {"id": "g6", "title": "LED Work Light 1000 Lumens", "description": "Rechargeable work light. Magnetic base, hook, 3 brightness levels.", "price": 45.99, "category": "lighting", "quality_score": 0.78, "lifespan_years": 5},
+  {"id": "g7", "title": "Fire Extinguisher 5 lb ABC", "description": "UL listed 5 lb ABC dry chemical. Wall bracket included. For general use.", "price": 42.00, "category": "safety", "quality_score": 0.92, "lifespan_years": 10},
+  {"id": "g8", "title": "Tool Cabinet 26\"", "description": "Steel tool cabinet with drawers and lock. Ball bearing slides. Red.", "price": 349.00, "category": "storage", "quality_score": 0.87, "lifespan_years": 20},
+  {"id": "g9", "title": "Hand Truck 400 lb", "description": "Aluminum hand truck. 400 lb capacity. Folding nose plate.", "price": 129.00, "category": "material-handling", "quality_score": 0.84, "lifespan_years": 12},
+  {"id": "g10", "title": "First Aid Kit 50-Piece", "description": "OSHA compliant first aid kit. Wall mount cabinet. Refillable.", "price": 28.99, "category": "safety", "quality_score": 0.80, "lifespan_years": 3},
+  {"id": "g11", "title": "Heavy-Duty Extension Cord 50 ft", "description": "12-gauge, 3-prong. Indoor/outdoor. Yellow jacket.", "price": 52.00, "category": "electrical", "quality_score": 0.83, "lifespan_years": 8},
+  {"id": "g12", "title": "Pallet Jack 5000 lb", "description": "Manual pallet jack. 5000 lb capacity. Steel forks 48\" length.", "price": 399.00, "category": "material-handling", "quality_score": 0.86, "lifespan_years": 15},
+  {"id": "g13", "title": "Steel Toe Boots", "description": "ASTM F2413-11 M I/75 C/75. Waterproof, electrical hazard rated.", "price": 89.99, "category": "safety", "quality_score": 0.81, "lifespan_years": 3},
+  {"id": "g14", "title": "Wet/Dry Vac 10 Gallon", "description": "Shop vac 10 gal, 5 HP. Hose and attachments included. On wheels.", "price": 119.00, "category": "tools", "quality_score": 0.79, "lifespan_years": 7},
+  {"id": "g15", "title": "Lockout Tagout Kit", "description": "6-piece LOTO kit. Padlock, tags, hasp. OSHA compliant.", "price": 65.00, "category": "safety", "quality_score": 0.88, "lifespan_years": 10},
+  {"id": "g16", "title": "Industrial Fan 20\"", "description": "Heavy-duty floor fan. 3 speeds, tilting head. Metal guard.", "price": 89.00, "category": "HVAC", "quality_score": 0.77, "lifespan_years": 8},
+  {"id": "g17", "title": "Spill Kit 30 Gallon", "description": "Universal absorbent spill kit. Sorbents, PPE, disposal bag.", "price": 78.00, "category": "safety", "quality_score": 0.85, "lifespan_years": 5},
+  {"id": "g18", "title": "Cord Reel 50 ft", "description": "Retractable cord reel. 12/3 SJTO. Mounting bracket included.", "price": 95.00, "category": "electrical", "quality_score": 0.82, "lifespan_years": 10},
+  {"id": "g19", "title": "Welding Helmet Auto-Darkening", "description": "Variable shade 9–13. Solar and battery. Grind mode.", "price": 149.00, "category": "safety", "quality_score": 0.84, "lifespan_years": 6},
+  {"id": "g20", "title": "Drum Dolly", "description": "55-gallon drum dolly. Steel construction. 4 swivel casters.", "price": 79.00, "category": "material-handling", "quality_score": 0.80, "lifespan_years": 12}
+]

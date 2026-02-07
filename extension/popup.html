@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ProcureWise</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <h1>ProcureWise</h1>
+    <div class="form">
+      <label for="apiBase">API Base URL</label>
+      <input type="text" id="apiBase" placeholder="http://localhost:8000" title="Backend URL (local or Railway)">
+      <button type="button" id="testConnection" class="secondary">Test Connection</button>
+      <button type="button" id="scanPage" class="secondary">Scan this page</button>
+      <p id="scanStatus" class="scan-status hidden"></p>
+      <label for="store">Store</label>
+      <select id="store">
+        <option value="amazon">Amazon</option>
+        <option value="grainger">Grainger</option>
+        <option value="page">Page (use after Scan)</option>
+      </select>
+      <label for="query">Describe what you need</label>
+      <textarea id="query" rows="2" placeholder="e.g. I want a classic watch for everyday use, budget up to $100"></textarea>
+      <button type="button" id="demoPreset" class="secondary">Demo Preset</button>
+      <button id="recommend">Recommend</button>
+      <p class="clear-row"><a href="#" id="clearCatalog" class="clear-link">Clear scanned catalog</a></p>
+      <p class="clear-row"><a href="#" id="clearSession" class="clear-link">Clear prompt & results</a></p>
+    </div>
+    <div id="status" class="status hidden"></div>
+    <details class="debug-details">
+      <summary>Debug</summary>
+      <p id="debugInfo" class="debug-info">—</p>
+    </details>
+    <ul id="results" class="results"></ul>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

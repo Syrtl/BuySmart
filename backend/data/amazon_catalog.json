@@ -1,0 +1,20 @@
+[
+  {"id": "a1", "title": "Ergonomic Office Chair", "description": "Mesh back office chair with lumbar support and adjustable armrests. Suitable for 8+ hour workdays.", "price": 189.99, "category": "furniture", "quality_score": 0.85, "lifespan_years": 8},
+  {"id": "a2", "title": "Wireless Keyboard and Mouse Combo", "description": "Quiet keys, ergonomic mouse. Bluetooth 5.0, long battery life.", "price": 49.99, "category": "electronics", "quality_score": 0.78, "lifespan_years": 4},
+  {"id": "a3", "title": "24\" LED Monitor", "description": "Full HD 1920x1080, IPS panel, slim bezel. VESA mount compatible.", "price": 129.99, "category": "electronics", "quality_score": 0.82, "lifespan_years": 6},
+  {"id": "a4", "title": "Standing Desk Converter", "description": "Sit-stand converter, fits most desks. Sturdy steel frame, two-tier keyboard tray.", "price": 159.00, "category": "furniture", "quality_score": 0.80, "lifespan_years": 10},
+  {"id": "a5", "title": "USB-C Hub 7-in-1", "description": "HDMI, USB 3.0, SD card reader, PD charging. Aluminum body.", "price": 39.99, "category": "electronics", "quality_score": 0.72, "lifespan_years": 3},
+  {"id": "a6", "title": "Desk Lamp with USB Port", "description": "LED adjustable lamp, dimmable, USB-A port for charging. Clamp or base mount.", "price": 34.99, "category": "furniture", "quality_score": 0.75, "lifespan_years": 5},
+  {"id": "a7", "title": "Noise-Cancelling Headphones", "description": "Over-ear Bluetooth headphones. 30hr battery, foldable, carrying case included.", "price": 149.99, "category": "electronics", "quality_score": 0.88, "lifespan_years": 5},
+  {"id": "a8", "title": "Laptop Stand Aluminum", "description": "Ventilated aluminum stand, adjustable height. Reduces neck strain.", "price": 29.99, "category": "furniture", "quality_score": 0.79, "lifespan_years": 8},
+  {"id": "a9", "title": "Webcam 1080p", "description": "Built-in microphone, auto light correction. Clip-on design for monitors.", "price": 59.99, "category": "electronics", "quality_score": 0.76, "lifespan_years": 4},
+  {"id": "a10", "title": "Cable Management Box", "description": "Fabric-covered box for power strip and cables. Keeps desk tidy.", "price": 19.99, "category": "accessories", "quality_score": 0.70, "lifespan_years": 6},
+  {"id": "a11", "title": "Mechanical Keyboard", "description": "Cherry MX-style switches, RGB backlight. Full size with numpad.", "price": 89.99, "category": "electronics", "quality_score": 0.84, "lifespan_years": 7},
+  {"id": "a12", "title": "Monitor Arm Single", "description": "Gas spring monitor arm, VESA 75/100. Cable management included.", "price": 69.99, "category": "furniture", "quality_score": 0.81, "lifespan_years": 10},
+  {"id": "a13", "title": "Desk Mat Extended", "description": "Large desk pad with stitched edges. Protects desk and reduces noise.", "price": 24.99, "category": "accessories", "quality_score": 0.77, "lifespan_years": 4},
+  {"id": "a14", "title": "Portable SSD 1TB", "description": "USB 3.2 Gen 2, compact. Shock resistant, 3-year warranty.", "price": 99.99, "category": "electronics", "quality_score": 0.86, "lifespan_years": 5},
+  {"id": "a15", "title": "Foot Rest Under Desk", "description": "Ergonomic angled foot rest. Improves posture and circulation.", "price": 27.99, "category": "furniture", "quality_score": 0.74, "lifespan_years": 6},
+  {"id": "a16", "title": "Document Camera", "description": "1080p document camera for presentations and scanning. USB plug-and-play.", "price": 79.99, "category": "electronics", "quality_score": 0.73, "lifespan_years": 5},
+  {"id": "a17", "title": "Whiteboard Small", "description": "Magnetic dry-erase board with markers and eraser. Wall mount or desktop.", "price": 22.99, "category": "accessories", "quality_score": 0.71, "lifespan_years": 7},
+  {"id": "a18", "title": "USB Microphone", "description": "Cardioid condenser mic for calls and recording. Includes desk stand.", "price": 54.99, "category": "electronics", "quality_score": 0.80, "lifespan_years": 5}
+]

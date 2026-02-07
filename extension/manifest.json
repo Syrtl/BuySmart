@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "ProcureWise",
+  "version": "1.1.0",
+  "description": "Product recommendations from store catalogs",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "ProcureWise"
+  },
+  "permissions": ["activeTab", "scripting", "storage"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "host_permissions": [
+    "http://localhost:8000/*",
+    "https://*.railway.app/*",
+    "https://*.up.railway.app/*",
+    "https://*.amazon.com/*",
+    "https://*.grainger.com/*",
+    "<all_urls>"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["*://*.amazon.com/*", "*://*.grainger.com/*", "<all_urls>"],
+      "js": ["content_script.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

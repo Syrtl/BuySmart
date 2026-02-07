@@ -1,0 +1,32 @@
+{
+  "user_text": "office chair under $200",
+  "store": "page",
+  "k": 8,
+  "catalog_override": [
+    { "id": "a1", "title": "Ergonomic Office Chair", "price": "$179.99", "url": "https://example.com/chair-1", "snippet": "Mesh back, adjustable armrests" },
+    { "id": "a2", "title": "Task Chair", "price": "149.50", "url": "https://example.com/chair-2", "snippet": "Compact office task chair" },
+    { "id": "a3", "title": "Gaming Chair XL", "price": "$249.00", "url": "https://example.com/chair-3", "snippet": "High-back gaming chair" },
+    { "id": "a4", "title": "Desk Lamp LED", "price": "$39.99", "url": "https://example.com/lamp-1", "snippet": "Dimmable lamp for desk use" },
+    { "id": "a5", "title": "Monitor 24 inch", "price": "199.99", "url": "https://example.com/monitor-1", "snippet": "Full HD IPS display" },
+    { "id": "a6", "title": "Office Chair Basic", "price": null, "url": "https://example.com/chair-4", "snippet": "Budget office chair" },
+    { "id": "a7", "title": "Standing Desk Converter", "price": "$89.00", "url": "https://example.com/desk-1", "snippet": "Adjustable desktop riser" },
+    { "id": "a8", "title": "Desk Organizer", "price": "$18.75", "url": "https://example.com/desk-2", "snippet": "Tray with compartments" },
+    { "id": "", "title": "Mesh Office Chair Plus", "price": "$199.95", "url": "https://example.com/chair-5", "snippet": "Breathable mesh office chair with lumbar support" },
+    { "title": "Executive Chair Leather", "price": "$299.99", "url": "https://example.com/chair-6", "snippet": "Executive style seating" },
+    { "title": "Desk Lamp Clamp", "price": "$27", "url": "https://example.com/lamp-2", "snippet": "Clamp lamp for monitor arm" },
+    { "title": "Foot Rest", "price": "24", "url": "https://example.com/footrest-1", "snippet": "Under-desk foot support" },
+    { "title": "Office Stool", "price": "N/A", "url": "https://example.com/stool-1", "snippet": "Rolling stool for office" },
+    { "title": "Wireless Keyboard", "price": "$55.00", "url": "https://example.com/keyboard-1", "snippet": "Quiet typing keyboard" },
+    { "title": "Desk Lamp Mini", "price": "$19.95", "url": "https://example.com/lamp-3", "snippet": "Small lamp for compact desks" },
+    { "title": "Office Chair Premium", "price": "$399.00", "url": "https://example.com/chair-7", "snippet": "Premium chair with headrest" },
+    { "title": "Task Chair Armless", "price": "$129.99", "url": "https://example.com/chair-8", "snippet": "Armless chair for small spaces" },
+    { "title": "Desk Mat", "price": "$14.49", "url": "https://example.com/mat-1", "snippet": "Large desk pad" },
+    { "title": "Chair Wheels Set", "price": "$21.00", "url": "https://example.com/wheels-1", "snippet": "Replacement caster wheels" },
+    { "title": "Lamp Bulb Pack", "price": "$11.99", "url": "https://example.com/bulb-1", "snippet": "LED bulbs 4-pack" },
+    { "title": "Office Chair Mid Back", "price": "USD 189.00", "url": "https://example.com/chair-9", "snippet": "Mid-back ergonomic chair" },
+    { "title": "Monitor Arm", "price": "$69.00", "url": "https://example.com/arm-1", "snippet": "Single monitor arm" },
+    { "title": "Office Chair Mesh Pro", "price": "$219.00", "url": "https://example.com/chair-10", "description": "Mesh chair with adjustable lumbar support and tilt lock." },
+    { "title": "Invalid Missing Price", "price": null, "url": "https://example.com/invalid-1", "snippet": "" },
+    { "title": "", "price": "$99.00", "url": "https://example.com/invalid-2", "snippet": "Should be dropped due to empty title" }
+  ]
+}
