@@ -1,11 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "ProcureWise",
+  "name": "BuySmart",
   "version": "1.1.0",
   "description": "Product recommendations from store catalogs",
   "action": {
     "default_popup": "popup.html",
-    "default_title": "ProcureWise"
+    "default_title": "BuySmart"
   },
   "permissions": ["activeTab", "scripting", "storage"],
   "background": {
