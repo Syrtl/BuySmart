@@ -28,6 +28,10 @@ let sessionPollTimer = null;
 let lastScanOrigin = '';
 let lastResultPriceById = {};
 let lastResultMetaById = {};
+let lastResultUrlById = {};
+let lastResultUrlByTitle = {};
+let lastRenderedStore = '';
+let lastRenderedScanOrigin = '';
 let priceHistoryModal = null;
 let timingModal = null;
 let valueChartModal = null;
@@ -205,6 +209,10 @@ function renderResults(items, urlMap, urlTitleMap, store, scanOrigin) {
   resultsEl.innerHTML = '';
   lastResultPriceById = {};
   lastResultMetaById = {};
+  lastResultUrlById = {};
+  lastResultUrlByTitle = {};
+  lastRenderedStore = String(store || '').toLowerCase();
+  lastRenderedScanOrigin = String(scanOrigin || '');
   if (!items || items.length === 0) {
     resultsEl.innerHTML = '<li class="empty">No recommendations. Try a different query or store.</li>';
     return;
@@ -241,6 +249,13 @@ function renderResults(items, urlMap, urlTitleMap, store, scanOrigin) {
     titleContainer.className = 'title';
     const titleText = compactDisplayTitle(item.title || '') || (item.title || '');
     const resolvedUrl = resolveItemUrl(item, urlMap, urlTitleMap, store, scanOrigin);
+    if (id && resolvedUrl) {
+      lastResultUrlById[id] = String(resolvedUrl);
+    }
+    var normalizedTitle = normalizeTitleKey(item.title || '');
+    if (normalizedTitle && resolvedUrl) {
+      lastResultUrlByTitle[normalizedTitle] = String(resolvedUrl);
+    }
     if (resolvedUrl) {
       const link = document.createElement('a');
       link.href = resolvedUrl;
@@ -355,7 +370,9 @@ function renderResults(items, urlMap, urlTitleMap, store, scanOrigin) {
           title: String(meta.title || item.title || ''),
           category: String(meta.category || item.category || ''),
           rating: meta.rating,
-          reviewCount: meta.reviewCount
+          reviewCount: meta.reviewCount,
+          store: store,
+          scanOrigin: scanOrigin
         });
       });
     }
@@ -549,6 +566,22 @@ function updateDebugInfo() {
   ].join(' · ');
 }
 
+function resolveValuePointUrl(point, context) {
+  point = point || {};
+  context = context || {};
+  var id = String(point.id || '').trim();
+  var title = String(point.title || '').trim();
+  var url = String(point.url || '').trim();
+  if (url) return url;
+  if (id && lastResultUrlById[id]) return String(lastResultUrlById[id]);
+  var tk = normalizeTitleKey(title);
+  if (tk && lastResultUrlByTitle[tk]) return String(lastResultUrlByTitle[tk]);
+
+  var store = String(context.store || lastRenderedStore || (storeEl && storeEl.value) || '').toLowerCase();
+  var origin = String(context.scanOrigin || lastRenderedScanOrigin || lastScanOrigin || '');
+  return buildFallbackLink(title, store, origin);
+}
+
 recommendBtn.addEventListener('click', async function () {
   var store = storeEl.value.trim().toLowerCase();
   var userText = queryEl.value.trim();
@@ -701,6 +734,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     valueChartModal = new window.ValueChartModal({
       getApiBase: getApiBase,
       fetchWithTimeout: fetchWithTimeout,
+      resolveProductUrl: resolveValuePointUrl,
       onError: function (message) {
         if (message) showStatus(String(message), 'error');
       }

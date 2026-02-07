@@ -205,6 +205,7 @@
     options = options || {};
     this.getApiBase = options.getApiBase;
     this.fetchWithTimeout = options.fetchWithTimeout;
+    this.resolveProductUrl = options.resolveProductUrl;
     this.onError = options.onError;
 
     this.sessionCache = new Map();
@@ -220,9 +221,11 @@
     this.chartEl = document.getElementById('valueChartModalChart');
     this.bodyEl = document.getElementById('valueChartModalBody');
     this.tooltipEl = document.getElementById('valueChartModalTooltip');
+    this.currentContext = { store: '', scanOrigin: '' };
 
     this.handleDocKeyDown = this.handleDocKeyDown.bind(this);
     this.handleMouseMove = this.handleMouseMove.bind(this);
+    this.handleClick = this.handleClick.bind(this);
     this.hideTooltip = this.hideTooltip.bind(this);
 
     if (this.modalEl) {
@@ -239,6 +242,7 @@
     if (this.chartWrapEl) {
       this.chartWrapEl.addEventListener('mousemove', this.handleMouseMove);
       this.chartWrapEl.addEventListener('mouseleave', this.hideTooltip);
+      this.chartWrapEl.addEventListener('click', this.handleClick);
     }
     document.addEventListener('keydown', this.handleDocKeyDown);
   }
@@ -265,6 +269,10 @@
 
     this.currentProductId = productId;
     this.currentRequestToken += 1;
+    this.currentContext = {
+      store: String(params.store || ''),
+      scanOrigin: String(params.scanOrigin || '')
+    };
 
     this.modalEl.classList.remove('hidden');
     this.hideTooltip();
@@ -495,12 +503,21 @@
     }
 
     var plotted = cleanPoints.map(function (point) {
+      var fallbackUrl = null;
+      if (typeof this.resolveProductUrl === 'function') {
+        try {
+          fallbackUrl = this.resolveProductUrl(point, this.currentContext || {});
+        } catch (_) {
+          fallbackUrl = null;
+        }
+      }
       return {
         point: point,
         x: xForPrice(point.price),
-        y: yForQuality(point.quality)
+        y: yForQuality(point.quality),
+        url: String(point.url || fallbackUrl || '').trim()
       };
-    });
+    }, this);
 
     var yTickValues = [0, 25, 50, 75, 100];
     var yTicks = [];
@@ -618,6 +635,9 @@
       this.hideTooltip();
       return;
     }
+    if (this.chartWrapEl) {
+      this.chartWrapEl.style.cursor = nearest.url ? 'pointer' : 'default';
+    }
 
     var point = nearest.point || {};
     var flags = [];
@@ -646,6 +666,34 @@
   ValueChartModal.prototype.hideTooltip = function () {
     if (!this.tooltipEl) return;
     this.tooltipEl.classList.add('hidden');
+    if (this.chartWrapEl) {
+      this.chartWrapEl.style.cursor = 'default';
+    }
+  };
+
+  ValueChartModal.prototype.handleClick = function (evt) {
+    if (!this.chartState || !this.chartWrapEl) return;
+    var rect = this.chartWrapEl.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+
+    var xView = ((evt.clientX - rect.left) / rect.width) * this.chartState.width;
+    var yView = ((evt.clientY - rect.top) / rect.height) * this.chartState.height;
+
+    var nearest = null;
+    var bestDist = Number.POSITIVE_INFINITY;
+    this.chartState.points.forEach(function (entry) {
+      var dx = entry.x - xView;
+      var dy = entry.y - yView;
+      var dist = (dx * dx) + (dy * dy);
+      if (dist < bestDist) {
+        bestDist = dist;
+        nearest = entry;
+      }
+    });
+    if (!nearest || !nearest.url) return;
+
+    if (bestDist > (16 * 16)) return;
+    window.open(nearest.url, '_blank', 'noopener,noreferrer');
   };
 
   window.ValueChartModal = ValueChartModal;
