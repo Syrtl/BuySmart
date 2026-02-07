@@ -119,10 +119,10 @@ def main():
 
     failed = 0
 
-    # 0) /api/price-history for 90 days: 200, 90 points, required fields, and cache source on repeated call
+    # 0) /api/price-history weekly mode: 200, 13 points, required fields, and cache source on repeated call
     try:
-        status1, data1, raw1 = _get_with_status("/api/price-history?productId=demo-asin-1&days=90&currentPrice=199.99", timeout=TIMEOUT)
-        status2, data2, raw2 = _get_with_status("/api/price-history?productId=demo-asin-1&days=90&currentPrice=199.99", timeout=TIMEOUT)
+        status1, data1, raw1 = _get_with_status("/api/price-history?productId=demo-asin-1&weeks=13&currentPrice=199.99", timeout=TIMEOUT)
+        status2, data2, raw2 = _get_with_status("/api/price-history?productId=demo-asin-1&weeks=13&currentPrice=199.99", timeout=TIMEOUT)
         if status1 != 200:
             print("FAIL: /api/price-history first call — expected 200, got", status1, safe_preview(raw1))
             failed += 1
@@ -131,21 +131,42 @@ def main():
             failed += 1
         else:
             points = (data1 or {}).get("points") or []
-            required = ("productId", "currency", "days", "points", "min", "max", "current", "lastUpdated", "source")
+            required = ("productId", "currency", "weeks", "points", "min", "max", "current", "lastUpdated", "source")
             missing_fields = [k for k in required if k not in (data1 or {})]
             if missing_fields:
                 print("FAIL: /api/price-history — missing fields:", missing_fields)
                 failed += 1
-            elif len(points) != 90:
-                print("FAIL: /api/price-history — expected 90 points, got", len(points))
+            elif len(points) != 13:
+                print("FAIL: /api/price-history — expected 13 points, got", len(points))
+                failed += 1
+            elif not all(isinstance(p, dict) and "label" in p and "date" in p and "price" in p for p in points):
+                print("FAIL: /api/price-history — points missing label/date/price fields")
                 failed += 1
             elif (data2 or {}).get("source") != "cached":
                 print("FAIL: /api/price-history — expected second call source='cached', got", (data2 or {}).get("source"))
                 failed += 1
             else:
-                print("PASS: /api/price-history — returns 90-day series and cached replay")
+                print("PASS: /api/price-history — returns 13-week series and cached replay")
     except Exception as e:
         print("FAIL: /api/price-history —", e)
+        failed += 1
+
+    # 0b) backward compatibility: days=90 should still return weekly payload
+    try:
+        status, data, raw = _get_with_status("/api/price-history?productId=demo-asin-2&days=90&currentPrice=129.99", timeout=TIMEOUT)
+        if status != 200:
+            print("FAIL: /api/price-history days=90 compatibility — expected 200, got", status, safe_preview(raw))
+            failed += 1
+        elif (data or {}).get("weeks") != 13:
+            print("FAIL: /api/price-history days=90 compatibility — expected weeks=13, got", (data or {}).get("weeks"))
+            failed += 1
+        elif len((data or {}).get("points") or []) != 13:
+            print("FAIL: /api/price-history days=90 compatibility — expected 13 points")
+            failed += 1
+        else:
+            print("PASS: /api/price-history days=90 compatibility — mapped to 13 weekly points")
+    except Exception as e:
+        print("FAIL: /api/price-history days=90 compatibility —", e)
         failed += 1
 
     # 1) /assistant/recommend "office chair under $150": at least one result contains "chair" (even if over budget); over-budget chair has "Over budget" in score_explanation

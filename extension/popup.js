@@ -1,12 +1,12 @@
 /**
- * @typedef {{date: string, price: number}} PricePoint
+ * @typedef {{label: string, date: string, price: number}} PricePoint
  * @typedef {{
  *   productId: string,
  *   currency: string,
- *   days: number,
+ *   weeks: number,
  *   points: PricePoint[],
- *   min: number,
- *   max: number,
+  *   min: number,
+  *   max: number,
  *   current: number,
  *   lastUpdated: string,
  *   source: 'mock'|'cached'
@@ -39,6 +39,7 @@ const priceHistoryStatusEl = document.getElementById('priceHistoryStatus');
 const priceHistoryStatsEl = document.getElementById('priceHistoryStats');
 const priceHistoryChartWrapEl = document.getElementById('priceHistoryChartWrap');
 const priceHistoryChartEl = document.getElementById('priceHistoryChart');
+const priceHistoryTooltipEl = document.getElementById('priceHistoryTooltip');
 
 let pageCatalog = [];
 let lastRequestDurationMs = null;
@@ -49,6 +50,7 @@ let sessionPollTimer = null;
 let lastScanOrigin = '';
 let lastResultPriceById = {};
 let lastAutoHistoryKey = '';
+let lastHistoryRenderState = null;
 
 function getApiBase() {
   const v = (apiBaseEl && apiBaseEl.value && apiBaseEl.value.trim()) || '';
@@ -289,8 +291,36 @@ function formatMoney(value, currency) {
   }
 }
 
-function renderPriceHistoryChart(points) {
+function formatAxisMoney(value) {
+  var n = Number(value);
+  if (!isFinite(n)) return '$0';
+  if (Math.abs(n - Math.round(n)) < 0.005) return '$' + String(Math.round(n));
+  return '$' + n.toFixed(2);
+}
+
+function hideHistoryTooltip() {
+  if (!priceHistoryTooltipEl) return;
+  priceHistoryTooltipEl.classList.add('hidden');
+}
+
+function showHistoryTooltip(point, x, y, currency) {
+  if (!priceHistoryTooltipEl || !priceHistoryChartWrapEl) return;
+  priceHistoryTooltipEl.innerHTML = [
+    escapeHtml(String(point.label || '')),
+    ' · ',
+    escapeHtml(String(point.date || '')),
+    '<br>',
+    escapeHtml(formatMoney(point.price, currency || 'USD'))
+  ].join('');
+  priceHistoryTooltipEl.style.left = x + 'px';
+  priceHistoryTooltipEl.style.top = y + 'px';
+  priceHistoryTooltipEl.classList.remove('hidden');
+}
+
+function renderPriceHistoryChart(points, currency) {
   if (!priceHistoryChartEl || !priceHistoryChartWrapEl) return;
+  hideHistoryTooltip();
+  lastHistoryRenderState = null;
   if (!Array.isArray(points) || points.length === 0) {
     priceHistoryChartEl.innerHTML = '';
     priceHistoryChartWrapEl.classList.add('hidden');
@@ -298,11 +328,13 @@ function renderPriceHistoryChart(points) {
   }
 
   var width = 360;
-  var height = 140;
-  var padX = 16;
-  var padY = 14;
-  var innerW = width - (padX * 2);
-  var innerH = height - (padY * 2);
+  var height = 170;
+  var padL = 40;
+  var padR = 10;
+  var padT = 12;
+  var padB = 30;
+  var innerW = width - padL - padR;
+  var innerH = height - padT - padB;
   var prices = points.map(function (p) { return Number(p.price); }).filter(function (n) { return isFinite(n); });
   if (prices.length === 0) {
     priceHistoryChartEl.innerHTML = '';
@@ -311,42 +343,72 @@ function renderPriceHistoryChart(points) {
   }
   var min = Math.min.apply(null, prices);
   var max = Math.max.apply(null, prices);
+  var spread = Math.max(0.01, max - min);
+  var padSpread = spread * 0.08;
+  min -= padSpread;
+  max += padSpread;
   var range = Math.max(0.01, max - min);
 
   function xAt(i) {
-    if (prices.length <= 1) return padX;
-    return padX + ((innerW * i) / (prices.length - 1));
+    if (prices.length <= 1) return padL;
+    return padL + ((innerW * i) / (prices.length - 1));
   }
   function yAt(v) {
     var t = (Number(v) - min) / range;
-    return (height - padY) - (t * innerH);
+    return (height - padB) - (t * innerH);
   }
 
   var pointPairs = [];
+  var circles = [];
+  var xLabels = [];
+  var xPoints = [];
   for (var i = 0; i < prices.length; i++) {
-    pointPairs.push(xAt(i).toFixed(2) + ',' + yAt(prices[i]).toFixed(2));
+    var px = xAt(i);
+    var py = yAt(prices[i]);
+    xPoints.push(px);
+    pointPairs.push(px.toFixed(2) + ',' + py.toFixed(2));
+    circles.push('<circle cx="' + px.toFixed(2) + '" cy="' + py.toFixed(2) + '" r="2.3" fill="#1565c0"/>');
+    var xLabel = points[i] && points[i].label ? String(points[i].label) : ((prices.length - i - 1) + 'w ago');
+    xLabels.push('<text x="' + px.toFixed(2) + '" y="' + (height - 10) + '" font-size="8" text-anchor="middle" fill="#5f6b7a">' + escapeHtml(xLabel) + '</text>');
   }
-  var polyline = pointPairs.join(' ');
-  var lastX = xAt(prices.length - 1).toFixed(2);
-  var lastY = yAt(prices[prices.length - 1]).toFixed(2);
+  var yTicks = [];
+  var yTickCount = 4;
+  for (var t = 0; t <= yTickCount; t++) {
+    var ratio = t / yTickCount;
+    var v = max - (range * ratio);
+    var y = yAt(v);
+    yTicks.push('<line x1="' + padL + '" y1="' + y.toFixed(2) + '" x2="' + (width - padR) + '" y2="' + y.toFixed(2) + '" stroke="#e8edf5" stroke-width="1"/>');
+    yTicks.push('<text x="' + (padL - 4) + '" y="' + (y + 3).toFixed(2) + '" font-size="8" text-anchor="end" fill="#66758a">' + escapeHtml(formatAxisMoney(v)) + '</text>');
+  }
 
+  priceHistoryChartEl.setAttribute('viewBox', '0 0 ' + width + ' ' + height);
   priceHistoryChartEl.innerHTML = [
-    '<line x1="' + padX + '" y1="' + (height - padY) + '" x2="' + (width - padX) + '" y2="' + (height - padY) + '" stroke="#d7dce5" stroke-width="1"/>',
-    '<line x1="' + padX + '" y1="' + padY + '" x2="' + padX + '" y2="' + (height - padY) + '" stroke="#d7dce5" stroke-width="1"/>',
-    '<polyline fill="none" stroke="#0d47a1" stroke-width="2" points="' + polyline + '"/>',
-    '<circle cx="' + lastX + '" cy="' + lastY + '" r="3" fill="#1565c0"/>'
+    yTicks.join(''),
+    '<line x1="' + padL + '" y1="' + (height - padB) + '" x2="' + (width - padR) + '" y2="' + (height - padB) + '" stroke="#d7dce5" stroke-width="1"/>',
+    '<line x1="' + padL + '" y1="' + padT + '" x2="' + padL + '" y2="' + (height - padB) + '" stroke="#d7dce5" stroke-width="1"/>',
+    '<polyline fill="none" stroke="#0d47a1" stroke-width="2" points="' + pointPairs.join(' ') + '"/>',
+    circles.join(''),
+    xLabels.join('')
   ].join('');
   priceHistoryChartWrapEl.classList.remove('hidden');
+
+  lastHistoryRenderState = {
+    width: width,
+    height: height,
+    xPoints: xPoints,
+    points: points.slice(),
+    currency: currency || 'USD'
+  };
 }
 
-function localMockPriceHistory(productId, days, currentPrice) {
-  var nDays = Math.max(1, Number(days || 90));
+function localMockPriceHistory(productId, weeks, currentPrice) {
+  var nWeeks = Math.max(1, Number(weeks || 13));
   var base = Number(currentPrice);
   if (!isFinite(base) || base <= 0) base = 100;
   var floor = Math.max(1, base * 0.75);
   var ceil = Math.max(floor + 0.01, base * 1.25);
   var seed = 0;
-  var text = String(productId || '') + '|' + String(nDays) + '|' + String(base.toFixed ? base.toFixed(2) : base);
+  var text = String(productId || '') + '|' + String(nWeeks) + '|' + String(base.toFixed ? base.toFixed(2) : base);
   for (var i = 0; i < text.length; i++) {
     seed = ((seed * 31) + text.charCodeAt(i)) >>> 0;
   }
@@ -355,16 +417,68 @@ function localMockPriceHistory(productId, days, currentPrice) {
     return seed / 4294967296;
   }
   var value = Math.max(floor, Math.min(ceil, base * (0.95 + (rand() * 0.1))));
+  var effects = {};
+  var dips = {};
+  var eventCount = rand() < 0.72 ? 1 : 2;
+  var starts = [];
+  var candidates = [];
+  for (var c = 1; c < Math.max(2, nWeeks - 2); c++) candidates.push(c);
+  for (var s = candidates.length - 1; s > 0; s--) {
+    var j = Math.floor(rand() * (s + 1));
+    var tmp = candidates[s];
+    candidates[s] = candidates[j];
+    candidates[j] = tmp;
+  }
+  for (var ci = 0; ci < candidates.length && starts.length < eventCount; ci++) {
+    var candidate = candidates[ci];
+    var near = false;
+    for (var si = 0; si < starts.length; si++) {
+      if (Math.abs(starts[si] - candidate) < 3) near = true;
+    }
+    if (!near) starts.push(candidate);
+  }
+  starts.sort(function (a, b) { return a - b; });
+  starts.forEach(function (start) {
+    var dipPct = 0.05 + (rand() * 0.10);
+    effects[start] = (effects[start] || 0) - dipPct;
+    dips[start] = true;
+    var recoveryWeeks = rand() < 0.6 ? 1 : 2;
+    var totalRecovery = dipPct * (0.55 + (rand() * 0.30));
+    if (recoveryWeeks === 1) {
+      if (start + 1 < nWeeks) effects[start + 1] = (effects[start + 1] || 0) + totalRecovery;
+    } else {
+      var first = totalRecovery * (0.45 + (rand() * 0.20));
+      var second = totalRecovery - first;
+      if (start + 1 < nWeeks) effects[start + 1] = (effects[start + 1] || 0) + first;
+      if (start + 2 < nWeeks) effects[start + 2] = (effects[start + 2] || 0) + second;
+    }
+  });
+
   var points = [];
   var now = new Date();
-  for (var d = nDays - 1; d >= 0; d--) {
-    var dt = new Date(now);
-    dt.setDate(now.getDate() - d);
-    var revert = (base - value) * 0.1;
-    var noise = ((rand() * 2) - 1) * (base * 0.012);
-    var spike = rand() < 0.05 ? (((rand() * 2) - 1) * (base * 0.04)) : 0;
-    value = Math.max(floor, Math.min(ceil, value + revert + noise + spike));
+  var anchor = new Date(now);
+  var daysSinceSunday = (anchor.getDay() + 0) % 7;
+  anchor.setDate(anchor.getDate() - daysSinceSunday);
+
+  for (var w = 0; w < nWeeks; w++) {
+    var baseChange = 0.005 + (rand() * 0.025);
+    var drift = (rand() < 0.5 ? -1 : 1) * baseChange;
+    var reversion = ((base - value) / base) * 0.30;
+    var delta = drift + reversion + (effects[w] || 0);
+    if (dips[w]) {
+      if (delta < -0.20) delta = -0.20;
+    } else {
+      if (delta > 0.07) delta = 0.07;
+      if (delta < -0.07) delta = -0.07;
+    }
+    value = value * (1 + delta);
+    value = Math.max(floor, Math.min(ceil, value));
+
+    var weeksAgo = nWeeks - w - 1;
+    var dt = new Date(anchor);
+    dt.setDate(anchor.getDate() - (weeksAgo * 7));
     points.push({
+      label: weeksAgo <= 0 ? 'Now' : (weeksAgo + 'w ago'),
       date: dt.toISOString().slice(0, 10),
       price: Number(value.toFixed(2))
     });
@@ -374,14 +488,44 @@ function localMockPriceHistory(productId, days, currentPrice) {
 
 function renderPriceHistoryResponse(data) {
   if (!data || !Array.isArray(data.points)) return;
-  renderPriceHistoryChart(data.points);
+  renderPriceHistoryChart(data.points, data.currency);
   var stats = [
-    'Current: ' + formatMoney(data.current, data.currency),
     'Min: ' + formatMoney(data.min, data.currency),
     'Max: ' + formatMoney(data.max, data.currency),
+    'Current: ' + formatMoney(data.current, data.currency),
     'Source: ' + String(data.source || 'mock')
   ].join(' · ');
   setHistoryStats(stats);
+}
+
+function onHistoryMouseMove(evt) {
+  if (!lastHistoryRenderState || !priceHistoryChartWrapEl) {
+    hideHistoryTooltip();
+    return;
+  }
+  var rect = priceHistoryChartWrapEl.getBoundingClientRect();
+  if (!rect.width || !rect.height) {
+    hideHistoryTooltip();
+    return;
+  }
+  var xView = ((evt.clientX - rect.left) / rect.width) * lastHistoryRenderState.width;
+  var nearestIndex = 0;
+  var nearestDistance = Number.POSITIVE_INFINITY;
+  for (var i = 0; i < lastHistoryRenderState.xPoints.length; i++) {
+    var d = Math.abs(lastHistoryRenderState.xPoints[i] - xView);
+    if (d < nearestDistance) {
+      nearestDistance = d;
+      nearestIndex = i;
+    }
+  }
+  var point = lastHistoryRenderState.points[nearestIndex];
+  if (!point) {
+    hideHistoryTooltip();
+    return;
+  }
+  var tooltipX = ((lastHistoryRenderState.xPoints[nearestIndex] / lastHistoryRenderState.width) * rect.width);
+  var tooltipY = Math.max(20, evt.clientY - rect.top - 6);
+  showHistoryTooltip(point, tooltipX, tooltipY, lastHistoryRenderState.currency);
 }
 
 function lookupResultPrice(productId) {
@@ -402,7 +546,7 @@ async function loadPriceHistory(productId, currentPrice) {
   showHistoryStatus('Loading price history…', 'loading');
   try {
     var apiBase = getApiBase();
-    var url = apiBase + '/api/price-history?productId=' + encodeURIComponent(id) + '&days=90';
+    var url = apiBase + '/api/price-history?productId=' + encodeURIComponent(id) + '&weeks=13';
     var priceHint = currentPrice;
     if (priceHint == null) priceHint = lookupResultPrice(id);
     if (priceHint != null && isFinite(Number(priceHint))) {
@@ -418,11 +562,11 @@ async function loadPriceHistory(productId, currentPrice) {
     renderPriceHistoryResponse(data);
     showHistoryStatus('Updated for ' + id + '.', '');
   } catch (e) {
-    var fallbackPoints = localMockPriceHistory(id, 90, currentPrice);
+    var fallbackPoints = localMockPriceHistory(id, 13, currentPrice);
     renderPriceHistoryResponse({
       productId: id,
       currency: 'USD',
-      days: 90,
+      weeks: 13,
       points: fallbackPoints,
       min: Math.min.apply(null, fallbackPoints.map(function (p) { return p.price; })),
       max: Math.max.apply(null, fallbackPoints.map(function (p) { return p.price; })),
@@ -748,6 +892,11 @@ if (loadPriceHistoryBtn) {
     var price = lookupResultPrice(String(id || '').trim());
     await loadPriceHistory(id, price);
   });
+}
+
+if (priceHistoryChartWrapEl) {
+  priceHistoryChartWrapEl.addEventListener('mousemove', onHistoryMouseMove);
+  priceHistoryChartWrapEl.addEventListener('mouseleave', hideHistoryTooltip);
 }
 
 document.addEventListener('DOMContentLoaded', async function () {

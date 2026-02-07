@@ -295,7 +295,7 @@ def root():
         "health": "/health",
         "recommend": "POST /recommend",
         "assistant": "POST /assistant/recommend",
-        "price_history": "GET /api/price-history?productId=XXX&days=90",
+        "price_history": "GET /api/price-history?productId=XXX&weeks=13",
     }
 
 
@@ -307,18 +307,25 @@ def health():
 @app.get("/api/price-history", response_model=PriceHistoryResponse)
 def price_history_endpoint(
     product_id: str | None = Query(None, alias="productId"),
-    days: int = Query(90, ge=1, le=365),
+    weeks: int | None = Query(None, ge=1, le=52),
+    days: int | None = Query(None, ge=1, le=365),
     current_price: float | None = Query(None, alias="currentPrice"),
 ):
     normalized_product_id = str(product_id or "").strip()
     if not normalized_product_id:
         raise HTTPException(status_code=400, detail="Missing required query parameter: productId")
+    if weeks is not None:
+        requested_weeks = weeks
+    elif days is not None:
+        requested_weeks = max(1, min(52, int(round(float(days) / 7.0))))
+    else:
+        requested_weeks = 13
     _load_catalogs()
     return get_price_history(
         data_dir=DATA_DIR,
         catalogs=CATALOGS,
         product_id=normalized_product_id,
-        days=days,
+        weeks=requested_weeks,
         current_price_hint=current_price,
     )
 

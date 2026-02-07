@@ -190,8 +190,8 @@ Server runs at **http://localhost:8000**. Docs: http://localhost:8000/docs
   - Response: list of `{ id, title, price, category, score, why }`
 
 - **GET /api/price-history**
-  - Query: `productId=XXX&days=90` (optional: `currentPrice=123.45`)
-  - Response: `{ productId, currency, days, points[90], min, max, current, lastUpdated, source }`
+  - Query: `productId=XXX&weeks=13` (optional: `currentPrice=123.45`; `days=90` still supported)
+  - Response: `{ productId, currency, weeks, points[13], min, max, current, lastUpdated, source }`
 
 Price history is mock-generated & cached for demo; consistent for 24 hours.
 
