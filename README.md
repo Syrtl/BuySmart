@@ -1,62 +1,43 @@
-# ProcureWise (BuySmart)
+#ProcureWise (BuySmart)
 
-A Chrome extension (Manifest V3) that calls a FastAPI backend to recommend products from a store catalog.
+This is a Chrome extension (built with Manifest V3) that hooks up to a FastAPI backend to suggest products from a store’s catalog.
 
----
+Demo Kit (SparkHacks)
 
-## Demo Kit (SparkHacks)
+- The backend runs on Railway.
+- All API keys live in Railway environment variables—nowhere else.
+- No secrets ever go to the client or end up in the repository.
 
-- **The backend is deployed on Railway.**  
-- **All API keys are stored exclusively in Railway environment variables.**  
-- **No secrets are shipped to the client or committed to the repository.**
+The extension never touches or stores your API keys. It just sends requests to whatever backend URL you give it. If you run the backend locally without cloud keys, it falls back to the deterministic recommender (no LLM involved).
 
-The extension never sees or stores API keys; it only sends requests to the backend URL you enter. If the backend runs locally without cloud keys, it uses the **deterministic recommender** (no LLM).
+How to Demo (5 steps)
 
-### Demo steps (5)
+1. Install the Chrome extension  
+   Go to chrome://extensions, switch on Developer mode, pick “Load unpacked,” and grab the extension/ folder from this repo.
 
-1. **Install the Chrome extension**  
-   Open `chrome://extensions` → turn on **Developer mode** → **Load unpacked** → select the **`extension/`** folder from this repo.
+2. 1. **Open Extension popup.** 
+    Click the ProcureWise Chrome toolbar icon.
 
-2. **Open the extension popup**  
-   Click the ProcureWise icon in the Chrome toolbar.
+2. **Set base API URL in popup.** 
+    Set the **Base API URL** to: 
+    `https://buysmart-production-1506.up.railway.app` in the popup window.
 
-3. **Set API Base URL**  
-   In the popup, set **API Base URL** to:  
-   `https://buysmart-production-1506.up.railway.app`
+3. **Test Connection.** 
+    Click the **Test Connection** button, you will see a successful connection message, returning a successful status code for the GET /health API call.
 
-4. **Test connection**  
-   Click **Test Connection**. You should see a success message (backend `/health` responds).
+4. **Get recommendation.**
+    Select **Amazon** or **Grainger**, enter a search term for purchasing (i.e. *office chair under $200*) and click on the **Recommend** button. The recommendation will appear in content card format with the title of the item, price of the item, category of the item, and an explanation.
 
-5. **Get a recommendation**  
-   Choose **Amazon** or **Grainger**, enter a task-based shopping request (e.g. *office chair under $200*), then click **Recommend**. Results appear as cards with title, price, category, and explanation.
-
-### Page Catalog mode (recommend from current page)
-
-Recommendations can be limited to products scanned from the **currently open** shopping page (e.g. Amazon search results, Grainger category).
-
-1. Open an Amazon or Grainger **search results or category page** in the current tab.
-2. Open the ProcureWise popup → click **Scan this page**. You should see e.g. *Scanned 37 products*.
-3. Optionally choose **Store: Page (use after Scan)** so it’s clear you’re using the scanned list.
-4. Enter a query (e.g. *chair under $150*) and click **Recommend**.
-5. Results are **only** from the scanned products; titles with URLs open in a new tab. Use **Clear scanned catalog** to reset.
-
-The backend receives the scanned list as `catalog_override` and recommends strictly from those items (no invented products). When `catalog_override` is present, the backend uses the **deterministic** recommender only (no LLM, no embeddings), so responses are fast and reliable on Railway.
-
-**Page Catalog demo checklist**
-- [ ] Open an Amazon (or Grainger) **search results** page in the browser.
-- [ ] In the extension popup, click **Scan this page** — you should see e.g. *Scanned N products* (up to 60).
-- [ ] Set **Store** to **Page (use after Scan)**.
-- [ ] Enter a query (e.g. *chair under $150*) and click **Recommend**.
-- [ ] Results are from the scanned page only; response is deterministic and does not use the LLM for override mode.
-
-### Manual demo checklist (Page Catalog)
-
-1. Open an **Amazon search results** page in Chrome.
-2. In ProcureWise popup, click **Scan this page**.
-3. Set **Store** = **Page (use after Scan)**.
-4. Enter a query (for example: `office chair under $200`) and click **Recommend**.
-5. Click a result title to open the product URL in a new tab.
-
+5. Page Catalog Mode (recommendation based on current page)
+     - Recommendation can be limited to only products that have been scanned by the Procuress from the **open shopping page** (e.g. Amazon search results or Granger's category page).
+    
+     1. Open the Amazon or Grainger **Category or Search Results page** in your current tab. 
+     2. Open the ProcureWise popup and **Scan this page**. After successfully scanning, you will see the number of products scanned (i.e. *37 Products Scanned*).
+     3. Select **Store: Page (use after scan)** if you want to use the above options out of the scanned product list.
+     4. Enter search criteria (i.e. *chair under $150*) and click **Recommend**.
+     5. You will only receive product recommendations from the scanned products and all titles that include URLs will open in new tabs. To start over, click on the **Clear Scanned Catalog** button. 
+     
+    
 ### Verify backend (no keys required)
 
 ```bash
@@ -111,37 +92,43 @@ RAILWAY_URL=https://your-app.up.railway.app ./scripts/smoke_test_railway.sh
 1. Chrome → `chrome://extensions` → **Developer mode** → **Load unpacked** → select the **`extension/`** folder.
 2. Open the popup → set **API Base URL** to your Railway URL (or `http://localhost:8000` for local).
 3. Click **Test Connection** (calls `/health`). Then use **Demo Preset** or type a query and click **Recommend**.
+**Installing the Extension**:
+1. To Install the Extension, go to: `chrome://extensions`, select **Developer Mode** in the top right corner, then click on **Load Unpacked Extension**, and select the extension/ folder.
+2. Open the extension's popup, enter your Railway URL in the **API Base URL** textbox (for local, use: `http://localhost:8000`).
+3. Click on **Test Connection** (this calls the "/health" endpoint). You can now use either the **Demo Preset**, or enter a query and click on **Recommend**.
 
 ---
 
-## Monorepo structure
+## Monorepo Layout
 
-- **backend/** — FastAPI server with recommender, TCO, and explain services
-- **extension/** — Chrome extension (MV3) popup UI
-- **shared/** — Optional shared types (not used in minimal scaffold)
+- **backend/** - Contains a FastAPI server that runs the recommender, TCO, and explain services.
+- **extension/** - Contains the Chrome MV3 extension popup UI code.
+- **shared/** - Optional folder containing any shared types we might reuse (optional in minimal scaffolding).
 
-## Requirements
+## Prerequisites
 
-- **Python 3.9+** (for backend; sentence-transformers and scikit-learn need a recent Python)
-- Chrome (for the extension)
+- **Python version 3.9 or greater** (this is required for the backend; both sentence-transformers and scikit-learn require a version of Python 3.6 or newer)
+- Chrome (you'll need this to run the extension).
 
 ---
 
-## Quick Demo (3 minutes) — local backend
+## Quick Demo (3 minutes) - Local Backend
 
-Local backend runs **without** the LLM and uses the **deterministic** catalog-only recommender. Install dependencies once: `pip install -r backend/requirements.txt` (from repo root, with venv activated).
-For local tests, also install dev deps: `pip install -r backend/requirements-dev.txt`.
+When running a local backend, we are not using the LLM (Large Language Model) and will be using a **deterministic** catalog-only recommender system. First install all dependencies from the repository root (after activating your virtual environment): `pip install -r backend/requirements.txt`. If you want to run tests locally, you'll also need to install development dependencies: `pip install -r backend/requirements-dev.txt`.
 
-1. **Start the backend** (from the repo root):
+To run the demo, you will need to do the following steps:
+
+1. Start the backend service from the repository root:
    ```bash
    ./scripts/run_backend.sh
    ```
-   Wait until you see `Uvicorn running on http://127.0.0.1:8000`. (First run may take 1–2 minutes while the embedding model downloads.)
+   Wait for the Uvicorn server to start and display the following in the console: `Uvicorn running on http://127.0.0.1:8000`. (Note: the first time you run this, it might take 1-2 minutes to start because of the time it takes to download the embeddings model.)
 
-2. **Load the Chrome extension**
-   - Open Chrome → **Extensions** → **Manage extensions** → **Load unpacked**
-   - Select the **`extension`** folder inside this repo.
-
+2. Install the extension in Chrome:
+   - Click "Settings" in Chrome and select the Extensions option from the left sidebar. Under Extensions, select **Manage Extensions** and click on the **Load Unpacked** link.
+   - Locate and select the `extension` folder from this repository.
+   
+   
 3. **Try a recommendation**
    - Leave **API Base URL** as `http://localhost:8000` (default). Click the ProcureWise icon.
    - Choose **Amazon** or **Grainger**, type e.g. *durable office chair under $200*, click **Recommend**.
@@ -170,19 +157,18 @@ uvicorn backend.main:app --reload
 
 Server runs at **http://localhost:8000**. Docs: http://localhost:8000/docs
 
-### 2. Chrome extension
+## Chrome Extension
 
-1. Open Chrome → **Extensions** → **Manage extensions** → **Load unpacked**
-2. Select the **extension** folder from this repo
-3. Ensure the backend is running, then click the extension icon and use the popup
+1. Open Chrome →  Extensions →  Manage Extensions →  Load Unpacked
+2. Select the Extension Folder from this Repository
+3. Make sure Your Backend Is Running then Click on Extension Icon and Use the Pop-Up
 
-### 3. Demo flow
+## Demo Flow
 
-1. Start backend (see above)
-2. Load extension unpacked
-3. In popup: choose store (Amazon or Grainger), type a request (e.g. "durable office chair under $200"), click **Recommend**
-4. Results show as cards with title, price, category, and "Why"
-
+1. Start The Backend (See Above)
+2. Load the Extension Unpacked
+3. Select Amazon or Grainger From The Drop Down And Type In your Search (for example, "office chair(take the first one)"> click RECOMMEND
+4. Your Output will be displayed as a Card including Title, Price, Category, and Why.
 ## API
 
 - **POST /recommend**
@@ -203,7 +189,7 @@ Server runs at **http://localhost:8000**. Docs: http://localhost:8000/docs
 
 Price history is mock-generated & cached for demo; consistent for 24 hours.
 Buy-timing is heuristic and category-calendar based for demo purposes; it is not a guarantee of future pricing.
-Price-vs-quality chart uses page/catalog comparables and an explainable heuristic: `quality_y = 0.65*Q0 + 0.35*Qm`, where `Q0` is LLM intrinsic quality and `Qm` is market validation; it is not a guarantee.
+Price-vs-quality chart uses page/catalog comparables and an explainable heuristic (rating x log10(reviews+1), normalized); it is also not a guarantee.
 
 ## Tech stack
 
@@ -279,27 +265,30 @@ python3 scripts/smoke_test.py https://your-app.up.railway.app
 # or
 RAILWAY_URL=https://your-app.up.railway.app ./scripts/smoke_test_railway.sh
 ```
+### Railway 502 Error (Port Mismatch)
 
-### Railway 502 Fix (Port mismatch)
+When a **502** response is returned from the **/health** endpoint and the Railway logs show that the `Uvicorn` is running at `http://0.0.0.0:8080` while the **Public Networking** option is routing traffic to port `8000`, you are currently using the wrong port due to an edge proxy server.
 
-If **/health** returns **502** and Railway logs show e.g. `Uvicorn running on http://0.0.0.0:8080` while **Public Networking** targets port **8000**, the edge proxy is hitting the wrong port.
+### Steps to Fix (Recommended):
 
-**Fix (recommended):**
+1. Go to your Service in Railway, click on the 'Variables' section.
+2. Add a new variable for **PORT** and set it to **8000**. This will change it so that your app listens on `8000`, the same port that the Railway default proxy routes to.
+3. Redeploy your service.
+4. Check the logs to verify that the app started with the same port you set in Step 2. "Starting on PORT=8000" and "Uvicorn running at http://0.0.0.0:8000" will confirm.
+5. Verify your health endpoint with `curl -i https://your-app.up.railway.app/health`. You should receive a response with a `200 OK` status and payload `{"status":"ok"}`.
 
-1. In Railway: open your service → **Variables**.
-2. Add **PORT** = **8000** (so the app listens on 8000 and matches the default proxy).
-3. **Redeploy** the service.
-4. Check logs for `Starting on PORT=8000` and `Uvicorn running on http://0.0.0.0:8000`.
-5. Verify: `curl -i https://your-app.up.railway.app/health` → expect **200** and `{"status":"ok"}`.
+### Alternative:
 
-**Alternative:** Change Railway **Networking** target port to **8080** (or whatever port the logs show) instead of setting PORT. We recommend setting **PORT=8000** so the app and proxy both use 8000.
+If you do not want to set the PORT variable, you can also change the target port under **Networking** to the same port number shown in the logs. In our example, you will adjust the Networking Target port to `8080`, although we suggest setting the PORT variable so that the app and proxy will operate on the same port.
 
-**If you still see 502:** Check Railway logs for errors. Set **DISABLE_EMBEDDINGS=1** in **Variables** (recommended for hackathon demo — fast cold starts, deterministic recommendations) and redeploy.
+**If you still receive a 502 error:**
 
-### 5. Use the extension with Railway
+Check the logs for an error and set the **DISABLE_EMBEDDINGS=1** environment variable (recommended for hackathon demo if you want to see better cold start performance, and consistent recommendations) and redeploy.
 
-1. Open the ProcureWise popup.
-2. In **API Base URL**, enter your Railway URL (e.g. `https://your-app.up.railway.app`).
-3. Click **Test Connection**. You should see "Connected: …".
-4. The value is saved in the browser (localStorage) for the next time.
-5. Use **Recommend** as usual; requests go to the Railway backend.
+### 5. How to use the extension with Railway:
+
+1. Click on the ProcureWise popup.
+2. Input your Railway URL as your **API Base URL** (e.g. `https://your-app.up.railway.app`).
+3. Click on Test Connection, you should see a "Success:..." message returned.
+4. This connection will be saved in your localStorage for the next request you make.
+5. You can continue to use **Recommend** as you always have, however, all of these requests will now be directed to your Railway backend.
