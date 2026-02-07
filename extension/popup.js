@@ -1,6 +1,7 @@
 const STORAGE_KEY_API_BASE = 'procurewise_api_base';
 const STORAGE_KEY_PAGE_CATALOG = 'procurewise_page_catalog';
 const STORAGE_KEY_LAST_SESSION = 'procurewise_last_session';
+const STORAGE_KEY_THEME = 'buysmart_theme';
 const DEFAULT_API_BASE = 'http://localhost:8000';
 const FETCH_TIMEOUT_MS = 8000;
 const PAGE_RECOMMEND_TIMEOUT_MS = 60000;
@@ -18,6 +19,7 @@ const scanPageBtn = document.getElementById('scanPage');
 const scanStatusEl = document.getElementById('scanStatus');
 const clearCatalogLink = document.getElementById('clearCatalog');
 const clearSessionLink = document.getElementById('clearSession');
+const themeToggleEl = document.getElementById('themeToggle');
 
 let pageCatalog = [];
 let lastRequestDurationMs = null;
@@ -30,6 +32,8 @@ let lastResultPriceById = {};
 let lastResultMetaById = {};
 let lastResultUrlById = {};
 let lastResultUrlByTitle = {};
+let lastResultImageById = {};
+let lastResultImageByTitle = {};
 let lastRenderedStore = '';
 let lastRenderedScanOrigin = '';
 let lastRenderedCards = [];
@@ -69,6 +73,24 @@ function saveApiBase() {
   try {
     localStorage.setItem(STORAGE_KEY_API_BASE, getApiBase());
   } catch (_) {}
+}
+
+function getSavedTheme() {
+  try {
+    var saved = localStorage.getItem(STORAGE_KEY_THEME);
+    if (saved === 'dark' || saved === 'light') return saved;
+  } catch (_) {}
+  return 'light';
+}
+
+function applyTheme(theme) {
+  var t = (theme === 'dark') ? 'dark' : 'light';
+  try {
+    document.documentElement.setAttribute('data-theme', t);
+  } catch (_) {}
+  if (themeToggleEl) {
+    themeToggleEl.checked = (t === 'dark');
+  }
 }
 
 function storageGet(key) {
@@ -160,6 +182,33 @@ function buildUniqueTitleUrlMap(items) {
   return map;
 }
 
+function normalizeImageUrl(value) {
+  var url = String(value || '').trim();
+  if (!url) return '';
+  try {
+    if (url.startsWith('//')) return window.location.protocol + url;
+    if (url.startsWith('/')) return new URL(url, window.location.origin).href;
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  } catch (_) {}
+  return '';
+}
+
+function buildUniqueTitleImageMap(items) {
+  var map = {};
+  var counts = {};
+  (items || []).forEach(function (p) {
+    var key = normalizeTitleKey(p && p.title ? p.title : '');
+    if (!key) return;
+    counts[key] = (counts[key] || 0) + 1;
+    var image = normalizeImageUrl(p && p.image ? p.image : '');
+    if (!map[key] && image) map[key] = image;
+  });
+  Object.keys(map).forEach(function (key) {
+    if ((counts[key] || 0) > 1) delete map[key];
+  });
+  return map;
+}
+
 function compactDisplayTitle(value) {
   var raw = String(value || '');
   if (!raw) return '';
@@ -224,12 +273,25 @@ function resolveItemUrl(item, urlMap, urlTitleMap, store, scanOrigin) {
   return buildFallbackLink(item.title || '', store, scanOrigin);
 }
 
+function resolveItemImage(item, imageMap, imageTitleMap) {
+  if (!item || typeof item !== 'object') return '';
+  var direct = normalizeImageUrl(item.image || '');
+  if (direct) return direct;
+  var id = String(item.id || '').trim();
+  if (id && imageMap && imageMap[id]) return String(imageMap[id]);
+  var titleKey = normalizeTitleKey(item.title || '');
+  if (titleKey && imageTitleMap && imageTitleMap[titleKey]) return String(imageTitleMap[titleKey]);
+  return '';
+}
+
 function renderResults(items, urlMap, urlTitleMap, store, scanOrigin) {
   resultsEl.innerHTML = '';
   lastResultPriceById = {};
   lastResultMetaById = {};
   lastResultUrlById = {};
   lastResultUrlByTitle = {};
+  lastResultImageById = {};
+  lastResultImageByTitle = {};
   lastRenderedCards = [];
   lastRenderedStore = String(store || '').toLowerCase();
   lastRenderedScanOrigin = String(scanOrigin || '');
@@ -241,6 +303,13 @@ function renderResults(items, urlMap, urlTitleMap, store, scanOrigin) {
   urlTitleMap = urlTitleMap || {};
   store = (store || '').toLowerCase();
   scanOrigin = scanOrigin || '';
+  var imageMap = {};
+  (pageCatalog || []).forEach(function (p) {
+    var pid = String((p && p.id) || '').trim();
+    var pimg = normalizeImageUrl(p && p.image ? p.image : '');
+    if (pid && pimg) imageMap[pid] = pimg;
+  });
+  var imageTitleMap = buildUniqueTitleImageMap(pageCatalog || []);
   items.forEach(function (item) {
     var id = String(item.id || '').trim();
     var maybePrice = parseNumericPrice(item.price);
@@ -269,6 +338,7 @@ function renderResults(items, urlMap, urlTitleMap, store, scanOrigin) {
     titleContainer.className = 'title';
     const titleText = compactDisplayTitle(item.title || '') || (item.title || '');
     const resolvedUrl = resolveItemUrl(item, urlMap, urlTitleMap, store, scanOrigin);
+    const resolvedImage = resolveItemImage(item, imageMap, imageTitleMap);
     if (id && resolvedUrl) {
       lastResultUrlById[id] = String(resolvedUrl);
     }
@@ -276,12 +346,19 @@ function renderResults(items, urlMap, urlTitleMap, store, scanOrigin) {
     if (normalizedTitle && resolvedUrl && !lastResultUrlByTitle[normalizedTitle]) {
       lastResultUrlByTitle[normalizedTitle] = String(resolvedUrl);
     }
+    if (id && resolvedImage) {
+      lastResultImageById[id] = String(resolvedImage);
+    }
+    if (normalizedTitle && resolvedImage && !lastResultImageByTitle[normalizedTitle]) {
+      lastResultImageByTitle[normalizedTitle] = String(resolvedImage);
+    }
     lastRenderedCards.push({
       id: id || '',
       title: String(item.title || ''),
       price: maybePrice != null ? Number(maybePrice) : null,
       rating: maybeRating != null ? Number(maybeRating) : null,
       reviewCount: maybeReviews != null ? Math.round(Number(maybeReviews)) : null,
+      image: resolvedImage ? String(resolvedImage) : null,
       url: resolvedUrl ? String(resolvedUrl) : null,
       category: String(item.category || '')
     });
@@ -312,6 +389,22 @@ function renderResults(items, urlMap, urlTitleMap, store, scanOrigin) {
     info.appendChild(titleContainer);
     info.appendChild(meta);
     info.appendChild(why);
+
+    if (resolvedImage) {
+      const media = document.createElement('div');
+      media.className = 'product-media';
+      const img = document.createElement('img');
+      img.className = 'product-image';
+      img.src = resolvedImage;
+      img.alt = titleText || 'Product image';
+      img.loading = 'lazy';
+      img.referrerPolicy = 'no-referrer';
+      img.addEventListener('error', function () {
+        media.remove();
+      });
+      media.appendChild(img);
+      main.appendChild(media);
+    }
 
     const actions = document.createElement('div');
     actions.className = 'product-actions';
@@ -574,6 +667,7 @@ function buildCatalogOverridePayload() {
       title: item.title || '',
       price: price != null ? price : null,
       url: item.url || null,
+      image: normalizeImageUrl(item.image || '') || null,
       snippet: snip || null,
       rating: rating != null ? rating : null,
       reviews_count: reviews != null ? Math.round(reviews) : null
@@ -792,6 +886,16 @@ if (testConnectionBtn) {
 }
 
 document.addEventListener('DOMContentLoaded', async function () {
+  applyTheme(getSavedTheme());
+  if (themeToggleEl) {
+    themeToggleEl.addEventListener('change', function () {
+      var nextTheme = themeToggleEl.checked ? 'dark' : 'light';
+      applyTheme(nextTheme);
+      try {
+        localStorage.setItem(STORAGE_KEY_THEME, nextTheme);
+      } catch (_) {}
+    });
+  }
   loadSavedApiBase();
   loadPageCatalog();
   if (window.PriceHistoryModal) {
@@ -866,6 +970,7 @@ if (scanPageBtn) {
           var snippet = snip(it.snippet || it.description || subtitle) || null;
           var title = mergeTitleAndSubtitle(it.title || '', subtitle || '');
           var itemUrl = it.url || null;
+          var itemImage = normalizeImageUrl(it.image || '') || null;
           if (!itemUrl && title) {
             itemUrl = buildFallbackLink(title, 'page', lastScanOrigin || scanOrigin || '');
           }
@@ -874,6 +979,7 @@ if (scanPageBtn) {
             title: title || '',
             price: parseNumericPrice(it.price),
             url: itemUrl,
+            image: itemImage,
             snippet: snippet,
             rating: parseNumericPrice(it.rating),
             reviews_count: parseNumericPrice(it.reviews_count || it.review_count || it.reviews)

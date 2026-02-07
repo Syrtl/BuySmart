@@ -27,6 +27,23 @@
   --speed: 180ms;
 }
 
+[data-theme="dark"] {
+  --bg: #0b1220;
+  --surface: #111a2c;
+  --surface-soft: #142033;
+  --primary: #3b82f6;
+  --primary-hover: #4f8fff;
+  --primary-pressed: #2c6ce0;
+  --secondary: #94a3b8;
+  --text: #e2e8f0;
+  --text-muted: #a8b4c7;
+  --divider: #24324a;
+  --ring: rgba(59, 130, 246, 0.24);
+  --shadow-sm: 0 1px 2px rgba(2, 6, 23, 0.5);
+  --shadow-md: 0 10px 24px rgba(2, 6, 23, 0.45);
+  --shadow-lg: 0 18px 42px rgba(2, 6, 23, 0.55);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -55,12 +72,71 @@ body {
   padding: 16px;
 }
 
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
 h1 {
-  margin: 0 0 14px;
+  margin: 0;
   font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.01em;
   color: var(--text);
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  user-select: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.theme-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.theme-toggle-track {
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  background: #c9d3e2;
+  border: 1px solid #b8c4d8;
+  display: inline-flex;
+  align-items: center;
+  padding: 1px;
+  transition: background-color var(--speed) ease, border-color var(--speed) ease;
+}
+
+.theme-toggle-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.22);
+  transform: translateX(0);
+  transition: transform var(--speed) ease, background-color var(--speed) ease;
+}
+
+.theme-toggle input:checked + .theme-toggle-track {
+  background: #3b82f6;
+  border-color: #2f73dc;
+}
+
+.theme-toggle input:checked + .theme-toggle-track .theme-toggle-thumb {
+  transform: translateX(14px);
+}
+
+.theme-toggle input:focus-visible + .theme-toggle-track {
+  box-shadow: 0 0 0 4px var(--ring);
 }
 
 .form {
@@ -69,6 +145,10 @@ h1 {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
   padding: 14px;
+}
+[data-theme="dark"] .form {
+  background: #111a2b;
+  border-color: #25334a;
 }
 
 .form label {
@@ -98,6 +178,12 @@ textarea {
     border-color var(--speed) ease,
     box-shadow var(--speed) ease,
     background-color var(--speed) ease;
+}
+[data-theme="dark"] .form input[type="text"],
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+  border-color: #2a3b55;
+  background: #0f1828;
 }
 
 textarea {
@@ -176,6 +262,11 @@ button.secondary {
   border-color: #d5dbe5;
   box-shadow: var(--shadow-sm);
   margin-top: 8px;
+}
+[data-theme="dark"] button.secondary {
+  background: #131f34;
+  border-color: #2f415e;
+  color: #b2c1d7;
 }
 
 button.secondary:hover {
@@ -308,8 +399,36 @@ button.secondary:hover {
 .product-card-main {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 14px;
+}
+
+.product-media {
+  flex: 0 0 auto;
+  width: 62px;
+  height: 62px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #dbe3f1;
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+}
+
+.product-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  background: #fff;
+}
+
+[data-theme="dark"] .product-media {
+  border-color: #2b3a51;
+  background: #0f1727;
+}
+
+[data-theme="dark"] .product-image {
+  background: #0f1727;
 }
 
 .product-info {
@@ -413,6 +532,10 @@ button.secondary:hover {
   border-radius: var(--radius-md);
   padding: 6px 8px;
 }
+[data-theme="dark"] .debug-details {
+  background: rgba(18, 28, 44, 0.82);
+  border-color: #27364f;
+}
 
 .debug-details summary {
   cursor: pointer;
@@ -465,6 +588,12 @@ button.secondary:hover {
   border: 1px solid rgba(148, 163, 184, 0.22);
   box-shadow: var(--shadow-lg);
   padding: 14px;
+}
+[data-theme="dark"] .price-modal-panel,
+[data-theme="dark"] .timing-modal-panel,
+[data-theme="dark"] .value-modal-panel {
+  border-color: #2b3a51;
+  background: #121d2f;
 }
 
 .price-modal-header,

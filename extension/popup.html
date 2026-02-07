@@ -8,7 +8,16 @@
 </head>
 <body>
   <div class="container">
-    <h1>BuySmart</h1>
+    <div class="topbar">
+      <h1>BuySmart</h1>
+      <label class="theme-toggle" for="themeToggle" title="Toggle dark theme">
+        <input type="checkbox" id="themeToggle" />
+        <span class="theme-toggle-track">
+          <span class="theme-toggle-thumb"></span>
+        </span>
+        <span class="theme-toggle-label">Dark</span>
+      </label>
+    </div>
     <div class="form">
       <button type="button" id="scanPage" class="secondary">Scan this page</button>
       <p id="scanStatus" class="scan-status hidden"></p>
