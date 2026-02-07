@@ -203,7 +203,7 @@ Server runs at **http://localhost:8000**. Docs: http://localhost:8000/docs
 
 Price history is mock-generated & cached for demo; consistent for 24 hours.
 Buy-timing is heuristic and category-calendar based for demo purposes; it is not a guarantee of future pricing.
-Price-vs-quality chart uses page/catalog comparables and an explainable heuristic (rating x log10(reviews+1), normalized); it is also not a guarantee.
+Price-vs-quality chart uses page/catalog comparables and an explainable heuristic: `quality_y = 0.65*Q0 + 0.35*Qm`, where `Q0` is LLM intrinsic quality and `Qm` is market validation; it is not a guarantee.
 
 ## Tech stack
 

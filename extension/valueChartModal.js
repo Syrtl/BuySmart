@@ -429,7 +429,8 @@
       html.push('<p class="value-modal-stat"><strong>Best Value:</strong> unavailable</p>');
     }
 
-    html.push('<p class="value-modal-stat">How we compute quality: rating x log10(reviews + 1), normalized to 0-100.</p>');
+    html.push('<p class="value-modal-stat">How we compute quality: Y = 0.65 x Q0 (LLM intrinsic) + 0.35 x Qm (market validation).</p>');
+    html.push('<p class="value-modal-stat">Qm uses rating, review volume, defect/return proxy, and positive-share proxy with safe fallbacks.</p>');
     html.push('<p class="value-modal-stat">Why this is best value: highest quality per dollar among reliable items.</p>');
 
     if (Array.isArray(data.explanation) && data.explanation.length) {

@@ -260,7 +260,20 @@ def main():
                 optimal_id = str((data or {}).get("optimalId") or "")
                 frontier_ids = [str(x) for x in ((data or {}).get("frontierIds") or [])]
                 first_point = points[0] if points else {}
-                point_fields = ("id", "title", "price", "rating", "reviewCount", "quality", "qualityRaw", "valueScore")
+                point_fields = (
+                    "id",
+                    "title",
+                    "price",
+                    "rating",
+                    "reviewCount",
+                    "quality",
+                    "qualityRaw",
+                    "valueScore",
+                    "quality_y",
+                    "intrinsic_q0",
+                    "market_qm",
+                    "breakdown",
+                )
                 missing_point_fields = [k for k in point_fields if k not in (first_point or {})]
                 if missing_point_fields:
                     print("FAIL: /api/value-chart — point missing fields:", missing_point_fields)
