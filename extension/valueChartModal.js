@@ -2,6 +2,7 @@
   function safePreview(text) {
     return String(text || '').replace(/\s+/g, ' ').trim().slice(0, 200);
   }
+  var POINT_HIT_RADIUS_PX = 14;
 
   function escapeHtml(text) {
     var div = document.createElement('div');
@@ -27,9 +28,7 @@
   function formatAxisMoney(value) {
     var n = Number(value);
     if (!isFinite(n)) return '$0';
-    if (Math.abs(n - Math.round(n)) < 0.005) {
-      return '$' + String(Math.round(n));
-    }
+    if (Math.abs(n - Math.round(n)) < 0.005) return '$' + String(Math.round(n));
     return '$' + n.toFixed(2);
   }
 
@@ -64,6 +63,16 @@
     };
   }
 
+  function syntheticRatingReviews(id, title) {
+    var rng = mulberry32(hashString('rr:' + String(id || '') + ':' + String(title || '')));
+    var rating = 3.2 + rng() * 1.7;
+    var reviews = 20 + Math.floor(Math.pow(rng(), 2) * 12000);
+    return {
+      rating: Math.max(1, Math.min(5, rating)),
+      reviewCount: Math.max(1, reviews)
+    };
+  }
+
   function percentile(values, pct) {
     if (!values || !values.length) return 0;
     var arr = values.slice().map(Number).filter(function (v) { return isFinite(v); }).sort(function (a, b) { return a - b; });
@@ -77,22 +86,39 @@
     return arr[low] + (arr[high] - arr[low]) * w;
   }
 
+  function normalizeTitleKey(value) {
+    return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+
   function normalizeLocalPoints(rawPoints) {
     var points = (rawPoints || []).map(function (item, idx) {
-      var rating = Math.max(1, Math.min(5, Number(item.rating || 0)));
-      var reviews = Math.max(0, Number(item.reviewCount || 0));
-      var qualityRaw = rating * Math.log10(reviews + 1);
+      var id = String(item.id || ('local-' + idx));
+      var title = String(item.title || ('Item ' + (idx + 1)));
+      var price = Number(item.price);
+      if (!isFinite(price) || price <= 0) return null;
+
+      var rating = Number(item.rating);
+      var reviewCount = Number(item.reviewCount);
+      if (!isFinite(rating) || rating <= 0 || !isFinite(reviewCount) || reviewCount < 0) {
+        var synth = syntheticRatingReviews(id, title);
+        if (!isFinite(rating) || rating <= 0) rating = synth.rating;
+        if (!isFinite(reviewCount) || reviewCount < 0) reviewCount = synth.reviewCount;
+      }
+      rating = Math.max(1, Math.min(5, rating));
+      reviewCount = Math.max(0, Math.round(reviewCount));
+
+      var qualityRaw = rating * Math.log10(reviewCount + 1);
       return {
-        id: String(item.id || ('local-' + idx)),
-        title: String(item.title || ('Comparable ' + (idx + 1))),
-        price: Math.max(1, Number(item.price || 0)),
-        rating: rating,
-        reviewCount: Math.round(reviews),
-        qualityRaw: qualityRaw
+        id: id,
+        title: title,
+        price: Number(price.toFixed(2)),
+        rating: Number(rating.toFixed(2)),
+        reviewCount: reviewCount,
+        qualityRaw: Number(qualityRaw.toFixed(5)),
+        url: item.url ? String(item.url) : '',
+        category: item.category ? String(item.category) : ''
       };
-    }).filter(function (p) {
-      return isFinite(p.price) && p.price > 0;
-    });
+    }).filter(Boolean);
 
     if (!points.length) return [];
 
@@ -108,16 +134,12 @@
       var quality = spread <= 1e-12 ? 50 : (100 * (point.qualityRaw - minRaw) / spread);
       point.quality = Number(quality.toFixed(2));
       point.valueScore = Number((quality / Math.max(point.price, 1e-9)).toFixed(6));
-      point.price = Number(point.price.toFixed(2));
-      point.rating = Number(point.rating.toFixed(2));
-      point.qualityRaw = Number(point.qualityRaw.toFixed(5));
     });
 
     points.sort(function (a, b) {
       if (a.price !== b.price) return a.price - b.price;
       return a.id.localeCompare(b.id);
     });
-
     return points;
   }
 
@@ -142,7 +164,6 @@
       if (a.price !== b.price) return a.price - b.price;
       return b.reviewCount - a.reviewCount;
     });
-
     return String(candidates[0].id || '');
   }
 
@@ -163,42 +184,219 @@
     return frontier;
   }
 
-  function buildLocalFallback(productId, currentPrice, title) {
-    var baseline = Number(currentPrice);
-    if (!isFinite(baseline) || baseline <= 0) baseline = 100;
-
-    var rng = mulberry32(hashString('value-local:' + productId + ':' + baseline.toFixed(2)));
-    var rawPoints = [];
-    for (var i = 0; i < 12; i++) {
-      var drift = i === 0 ? 0 : (-0.35 + rng() * 0.7);
-      var price = baseline * (1 + drift);
-      var rating = 3.2 + rng() * 1.7;
-      var reviews = 25 + Math.floor(Math.pow(rng(), 2) * 12000);
-      rawPoints.push({
-        id: i === 0 ? String(productId) : String(productId) + '-local-' + i,
-        title: i === 0 ? (title || String(productId)) : ('Comparable Option ' + i),
-        price: Math.max(3, price),
-        rating: rating,
-        reviewCount: reviews
-      });
+  function buildLocalFromComparables(productId, comparables, currentPrice, title) {
+    var points = normalizeLocalPoints(comparables || []);
+    if (!points.length) {
+      var baseline = Number(currentPrice);
+      if (!isFinite(baseline) || baseline <= 0) baseline = 100;
+      var rng = mulberry32(hashString('value-local:' + productId + ':' + baseline.toFixed(2)));
+      var raw = [];
+      for (var i = 0; i < 12; i++) {
+        var drift = i === 0 ? 0 : (-0.35 + rng() * 0.7);
+        raw.push({
+          id: i === 0 ? String(productId) : (String(productId) + '-local-' + i),
+          title: i === 0 ? (title || String(productId)) : ('Alternative ' + i),
+          price: Math.max(3, baseline * (1 + drift))
+        });
+      }
+      points = normalizeLocalPoints(raw);
     }
-
-    var points = normalizeLocalPoints(rawPoints);
-    var optimalId = pickOptimal(points);
-    var frontierIds = paretoFrontierIds(points);
 
     return {
       productId: String(productId),
       currency: 'USD',
       points: points,
-      optimalId: optimalId,
-      frontierIds: frontierIds,
+      optimalId: pickOptimal(points),
+      frontierIds: paretoFrontierIds(points),
       explanation: [
         'Quality score = rating x log10(reviewCount + 1), normalized to 0-100.',
         'Best Value picks the highest quality-per-dollar point after reliability filters.',
-        'This local chart is demo fallback data because the backend was unreachable.'
+        'Local comparables were used for this chart.'
       ]
     };
+  }
+
+  function mergeBackendWithLocal(data, localComparables) {
+    var points = Array.isArray(data.points) ? data.points.slice() : [];
+    var local = Array.isArray(localComparables) ? localComparables : [];
+    if (!points.length || !local.length) return data;
+
+    var byId = {};
+    var byTitleUnique = {};
+    var titleCounts = {};
+    local.forEach(function (row) {
+      var id = String(row.id || '').trim();
+      if (id) byId[id] = row;
+      var tk = normalizeTitleKey(row.title || '');
+      if (!tk) return;
+      titleCounts[tk] = (titleCounts[tk] || 0) + 1;
+      if (!byTitleUnique[tk]) byTitleUnique[tk] = row;
+    });
+    Object.keys(byTitleUnique).forEach(function (tk) {
+      if ((titleCounts[tk] || 0) > 1) delete byTitleUnique[tk];
+    });
+
+    var merged = points.map(function (point) {
+      var id = String(point.id || '').trim();
+      var localById = id ? byId[id] : null;
+      var localByTitle = byTitleUnique[normalizeTitleKey(point.title || '')] || null;
+      var ref = localById || localByTitle;
+      if (!ref) return point;
+      return Object.assign({}, point, {
+        title: ref.title || point.title,
+        url: ref.url || point.url,
+        category: ref.category || point.category
+      });
+    });
+
+    return Object.assign({}, data, { points: merged });
+  }
+
+  function shouldPreferLocalData(data, localComparables) {
+    var local = Array.isArray(localComparables) ? localComparables : [];
+    if (local.length < 3) return false;
+    var points = Array.isArray(data.points) ? data.points : [];
+    if (!points.length) return true;
+
+    var genericCount = 0;
+    points.forEach(function (point) {
+      var t = String(point.title || '');
+      if (/^(comparable\s+option|item\s+\d+|alternative\s+\d+)\b/i.test(t)) genericCount += 1;
+    });
+    if (genericCount > 0 && local.length >= Math.min(5, points.length)) return true;
+    if ((genericCount / points.length) > 0.25) return true;
+    if ((genericCount / points.length) > 0.5) return true;
+
+    var localIds = {};
+    local.forEach(function (row) {
+      var id = String(row.id || '').trim();
+      if (id) localIds[id] = true;
+    });
+    var overlap = 0;
+    points.forEach(function (point) {
+      if (localIds[String(point.id || '').trim()]) overlap += 1;
+    });
+    if (overlap === 0 && local.length >= 5) return true;
+    if (local.length >= 5 && (overlap / points.length) < 0.6) return true;
+
+    return false;
+  }
+
+  function fingerprintComparables(localComparables) {
+    var local = Array.isArray(localComparables) ? localComparables : [];
+    if (!local.length) return 'none';
+    var rows = local.slice(0, 80).map(function (row) {
+      return [
+        String(row.id || '').trim(),
+        normalizeTitleKey(row.title || ''),
+        String(Number(row.price || 0).toFixed(2)),
+        String(row.url || '').trim()
+      ].join('|');
+    }).sort();
+    return String(hashString(rows.join('||')));
+  }
+
+  function pointValueScore(point) {
+    var fromPoint = Number(point && point.valueScore);
+    if (isFinite(fromPoint) && fromPoint > 0) return fromPoint;
+    var quality = Number(point && point.quality);
+    var price = Number(point && point.price);
+    if (!isFinite(quality) || !isFinite(price) || price <= 0) return 0;
+    return quality / price;
+  }
+
+  function selectChartPoints(points, optimalId, currentId) {
+    var clean = (points || []).filter(function (point) {
+      return point && isFinite(Number(point.price)) && isFinite(Number(point.quality));
+    });
+    if (clean.length <= 18) return clean.slice();
+
+    var best = null;
+    clean.forEach(function (point) {
+      if (String(point.id || '') === String(optimalId || '')) best = point;
+    });
+    if (!best) {
+      best = clean.slice().sort(function (a, b) {
+        return pointValueScore(b) - pointValueScore(a);
+      })[0] || null;
+    }
+    if (!best) return clean.slice(0, 18);
+
+    var bestPrice = Math.max(1e-9, Number(best.price));
+    var bestQuality = Number(best.quality);
+    var bestScore = Math.max(1e-9, pointValueScore(best));
+
+    var ranked = clean.map(function (point) {
+      var price = Number(point.price);
+      var quality = Number(point.quality);
+      var value = pointValueScore(point);
+      var priceGap = Math.abs(price - bestPrice) / bestPrice;
+      var qualityGap = Math.abs(quality - bestQuality) / 100;
+      var valueGap = Math.abs(value - bestScore) / bestScore;
+      return {
+        point: point,
+        metric: (valueGap * 0.6) + (priceGap * 0.3) + (qualityGap * 0.1),
+        priceGap: priceGap
+      };
+    }).sort(function (a, b) {
+      if (a.metric !== b.metric) return a.metric - b.metric;
+      if (a.priceGap !== b.priceGap) return a.priceGap - b.priceGap;
+      return Number(a.point.price) - Number(b.point.price);
+    });
+
+    var selected = [];
+    var selectedById = {};
+    function addPoint(point) {
+      if (!point) return;
+      var id = String(point.id || '');
+      if (!id || selectedById[id]) return;
+      selectedById[id] = true;
+      selected.push(point);
+    }
+
+    addPoint(best);
+    ranked.forEach(function (row) {
+      if (selected.length >= 14) return;
+      addPoint(row.point);
+    });
+
+    clean.forEach(function (point) {
+      if (String(point.id || '') === String(currentId || '')) addPoint(point);
+    });
+
+    var cheaper = clean.filter(function (point) {
+      return Number(point.price) < bestPrice && !selectedById[String(point.id || '')];
+    }).sort(function (a, b) {
+      return Math.abs(Number(a.price) - bestPrice) - Math.abs(Number(b.price) - bestPrice);
+    });
+    var pricier = clean.filter(function (point) {
+      return Number(point.price) > bestPrice && !selectedById[String(point.id || '')];
+    }).sort(function (a, b) {
+      return Math.abs(Number(a.price) - bestPrice) - Math.abs(Number(b.price) - bestPrice);
+    });
+
+    if (selected.length < 16 && cheaper.length) addPoint(cheaper[0]);
+    if (selected.length < 16 && pricier.length) addPoint(pricier[0]);
+    if (selected.length < 16 && cheaper.length > 1) addPoint(cheaper[1]);
+    if (selected.length < 16 && pricier.length > 1) addPoint(pricier[1]);
+
+    if (selected.length > 16) {
+      var keepIds = {};
+      keepIds[String(best.id || '')] = true;
+      if (currentId) keepIds[String(currentId)] = true;
+      selected = selected.sort(function (a, b) {
+        var aKeep = keepIds[String(a.id || '')] ? 1 : 0;
+        var bKeep = keepIds[String(b.id || '')] ? 1 : 0;
+        if (aKeep !== bKeep) return bKeep - aKeep;
+        var aMetric = Math.abs(pointValueScore(a) - bestScore) / bestScore;
+        var bMetric = Math.abs(pointValueScore(b) - bestScore) / bestScore;
+        return aMetric - bMetric;
+      }).slice(0, 16);
+    }
+
+    return selected.sort(function (a, b) {
+      return Number(a.price) - Number(b.price);
+    });
   }
 
   function ValueChartModal(options) {
@@ -212,6 +410,8 @@
     this.currentProductId = '';
     this.currentRequestToken = 0;
     this.chartState = null;
+    this.currentContext = { store: '', scanOrigin: '' };
+    this.localComparables = [];
 
     this.modalEl = document.getElementById('valueChartModal');
     this.closeBtnEl = document.getElementById('valueChartModalClose');
@@ -221,7 +421,6 @@
     this.chartEl = document.getElementById('valueChartModalChart');
     this.bodyEl = document.getElementById('valueChartModalBody');
     this.tooltipEl = document.getElementById('valueChartModalTooltip');
-    this.currentContext = { store: '', scanOrigin: '' };
 
     this.handleDocKeyDown = this.handleDocKeyDown.bind(this);
     this.handleMouseMove = this.handleMouseMove.bind(this);
@@ -248,9 +447,7 @@
   }
 
   ValueChartModal.prototype.handleDocKeyDown = function (evt) {
-    if (evt && evt.key === 'Escape' && this.isOpen()) {
-      this.close();
-    }
+    if (evt && evt.key === 'Escape' && this.isOpen()) this.close();
   };
 
   ValueChartModal.prototype.isOpen = function () {
@@ -273,12 +470,13 @@
       store: String(params.store || ''),
       scanOrigin: String(params.scanOrigin || '')
     };
+    this.localComparables = Array.isArray(params.localComparables) ? params.localComparables.slice(0, 120) : [];
 
     this.modalEl.classList.remove('hidden');
     this.hideTooltip();
     this.setStatus('Loading value chart…', 'loading');
     this.setBody('');
-    this.renderChart([], productId, '', []);
+    this.renderChart([], productId, '', [], 'USD');
 
     if (this.productEl) {
       this.productEl.textContent = title || productId;
@@ -332,16 +530,16 @@
   ValueChartModal.prototype.loadValueChart = async function (params) {
     var productId = String(params.productId || '').trim();
     var requestToken = Number(params.requestToken || 0);
-    var cacheKey = productId;
+    var cacheKey = productId + '::' + fingerprintComparables(this.localComparables);
 
     var cached = this.sessionCache.get(cacheKey);
     if (cached) {
+      if (shouldPreferLocalData(cached, this.localComparables)) {
+        cached = buildLocalFromComparables(productId, this.localComparables, params.currentPrice, params.title);
+        this.sessionCache.set(cacheKey, cached);
+      }
       if (requestToken !== this.currentRequestToken) return;
-      this.renderFromResponse(cached, {
-        productId: productId,
-        fromCache: true,
-        fallbackMode: false
-      });
+      this.renderFromResponse(cached, { productId: productId, fromCache: true, fallbackMode: false });
       return;
     }
 
@@ -351,12 +549,8 @@
       if (params.currentPrice != null && isFinite(Number(params.currentPrice))) {
         url += '&currentPrice=' + encodeURIComponent(String(Number(params.currentPrice)));
       }
-      if (params.title) {
-        url += '&title=' + encodeURIComponent(String(params.title));
-      }
-      if (params.category) {
-        url += '&category=' + encodeURIComponent(String(params.category));
-      }
+      if (params.title) url += '&title=' + encodeURIComponent(String(params.title));
+      if (params.category) url += '&category=' + encodeURIComponent(String(params.category));
       if (params.rating != null && isFinite(Number(params.rating))) {
         url += '&rating=' + encodeURIComponent(String(Number(params.rating)));
       }
@@ -378,33 +572,24 @@
       }
 
       var raw = await res.text();
-      if (!res.ok) {
-        throw new Error('HTTP ' + res.status + ': ' + safePreview(raw));
-      }
+      if (!res.ok) throw new Error('HTTP ' + res.status + ': ' + safePreview(raw));
 
       var data = raw ? JSON.parse(raw) : null;
-      if (!isValidResponse(data)) {
-        throw new Error('Unexpected response format');
+      if (!isValidResponse(data)) throw new Error('Unexpected response format');
+
+      data = mergeBackendWithLocal(data, this.localComparables);
+      if (shouldPreferLocalData(data, this.localComparables)) {
+        data = buildLocalFromComparables(productId, this.localComparables, params.currentPrice, params.title);
       }
 
       this.sessionCache.set(cacheKey, data);
       if (requestToken !== this.currentRequestToken) return;
-
-      this.renderFromResponse(data, {
-        productId: productId,
-        fromCache: false,
-        fallbackMode: false
-      });
+      this.renderFromResponse(data, { productId: productId, fromCache: false, fallbackMode: false });
     } catch (err) {
       if (requestToken !== this.currentRequestToken) return;
-
-      var fallback = buildLocalFallback(productId, params.currentPrice, params.title);
-      this.renderFromResponse(fallback, {
-        productId: productId,
-        fromCache: false,
-        fallbackMode: true
-      });
-      this.setStatus('Server unreachable. Showing local demo chart.', 'error');
+      var fallback = buildLocalFromComparables(productId, this.localComparables, params.currentPrice, params.title);
+      this.renderFromResponse(fallback, { productId: productId, fromCache: false, fallbackMode: true });
+      this.setStatus('Server unreachable. Showing local chart.', 'error');
       if (typeof this.onError === 'function') {
         this.onError((err && err.message) ? err.message : 'Value chart unavailable');
       }
@@ -421,13 +606,18 @@
     var optimalId = String(data.optimalId || '');
     var currentId = String(options.productId || this.currentProductId || '');
     var frontierIds = Array.isArray(data.frontierIds) ? data.frontierIds.map(String) : [];
+    var focusedPoints = selectChartPoints(points, optimalId, currentId);
+    var focusedIds = {};
+    focusedPoints.forEach(function (point) { focusedIds[String(point.id || '')] = true; });
+    var focusedFrontier = frontierIds.filter(function (id) { return focusedIds[String(id || '')]; });
+    if (focusedFrontier.length < 2) {
+      focusedFrontier = paretoFrontierIds(focusedPoints);
+    }
 
-    this.renderChart(points, currentId, optimalId, frontierIds, data.currency || 'USD');
+    this.renderChart(focusedPoints, currentId, optimalId, focusedFrontier, data.currency || 'USD');
 
     var pointMap = {};
-    points.forEach(function (point) {
-      pointMap[String(point.id || '')] = point;
-    });
+    points.forEach(function (point) { pointMap[String(point.id || '')] = point; });
     var best = pointMap[optimalId] || null;
 
     var html = [];
@@ -503,12 +693,12 @@
     }
 
     var plotted = cleanPoints.map(function (point) {
-      var fallbackUrl = null;
+      var fallbackUrl = '';
       if (typeof this.resolveProductUrl === 'function') {
         try {
-          fallbackUrl = this.resolveProductUrl(point, this.currentContext || {});
+          fallbackUrl = this.resolveProductUrl(point, this.currentContext || {}) || '';
         } catch (_) {
-          fallbackUrl = null;
+          fallbackUrl = '';
         }
       }
       return {
@@ -538,14 +728,13 @@
     }
 
     var frontierLookup = {};
-    frontierIds.forEach(function (id) {
-      frontierLookup[String(id)] = true;
-    });
+    frontierIds.forEach(function (id) { frontierLookup[String(id)] = true; });
     var frontierPoints = plotted.filter(function (item) {
       return frontierLookup[String(item.point.id || '')];
     }).sort(function (a, b) {
       return Number(a.point.price) - Number(b.point.price);
     });
+
     var frontierPath = '';
     if (frontierPoints.length >= 2) {
       frontierPath = '<polyline fill="none" stroke="#6366f1" stroke-width="2" stroke-dasharray="4 3" points="' + frontierPoints.map(function (item) {
@@ -631,13 +820,13 @@
       }
     });
 
-    if (!nearest) {
+    if (!nearest || bestDist > (POINT_HIT_RADIUS_PX * POINT_HIT_RADIUS_PX)) {
+      this.chartWrapEl.style.cursor = 'default';
       this.hideTooltip();
       return;
     }
-    if (this.chartWrapEl) {
-      this.chartWrapEl.style.cursor = nearest.url ? 'pointer' : 'default';
-    }
+
+    this.chartWrapEl.style.cursor = nearest.url ? 'pointer' : 'default';
 
     var point = nearest.point || {};
     var flags = [];
@@ -666,13 +855,12 @@
   ValueChartModal.prototype.hideTooltip = function () {
     if (!this.tooltipEl) return;
     this.tooltipEl.classList.add('hidden');
-    if (this.chartWrapEl) {
-      this.chartWrapEl.style.cursor = 'default';
-    }
+    if (this.chartWrapEl) this.chartWrapEl.style.cursor = 'default';
   };
 
   ValueChartModal.prototype.handleClick = function (evt) {
     if (!this.chartState || !this.chartWrapEl) return;
+
     var rect = this.chartWrapEl.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
 
@@ -690,9 +878,10 @@
         nearest = entry;
       }
     });
-    if (!nearest || !nearest.url) return;
 
-    if (bestDist > (16 * 16)) return;
+    if (!nearest || !nearest.url) return;
+    if (bestDist > (POINT_HIT_RADIUS_PX * POINT_HIT_RADIUS_PX)) return;
+
     window.open(nearest.url, '_blank', 'noopener,noreferrer');
   };
 

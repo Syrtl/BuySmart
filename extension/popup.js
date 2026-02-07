@@ -32,6 +32,7 @@ let lastResultUrlById = {};
 let lastResultUrlByTitle = {};
 let lastRenderedStore = '';
 let lastRenderedScanOrigin = '';
+let lastRenderedCards = [];
 let priceHistoryModal = null;
 let timingModal = null;
 let valueChartModal = null;
@@ -211,6 +212,7 @@ function renderResults(items, urlMap, urlTitleMap, store, scanOrigin) {
   lastResultMetaById = {};
   lastResultUrlById = {};
   lastResultUrlByTitle = {};
+  lastRenderedCards = [];
   lastRenderedStore = String(store || '').toLowerCase();
   lastRenderedScanOrigin = String(scanOrigin || '');
   if (!items || items.length === 0) {
@@ -256,6 +258,15 @@ function renderResults(items, urlMap, urlTitleMap, store, scanOrigin) {
     if (normalizedTitle && resolvedUrl) {
       lastResultUrlByTitle[normalizedTitle] = String(resolvedUrl);
     }
+    lastRenderedCards.push({
+      id: id || '',
+      title: String(item.title || ''),
+      price: maybePrice != null ? Number(maybePrice) : null,
+      rating: maybeRating != null ? Number(maybeRating) : null,
+      reviewCount: maybeReviews != null ? Math.round(Number(maybeReviews)) : null,
+      url: resolvedUrl ? String(resolvedUrl) : null,
+      category: String(item.category || '')
+    });
     if (resolvedUrl) {
       const link = document.createElement('a');
       link.href = resolvedUrl;
@@ -372,7 +383,15 @@ function renderResults(items, urlMap, urlTitleMap, store, scanOrigin) {
           rating: meta.rating,
           reviewCount: meta.reviewCount,
           store: store,
-          scanOrigin: scanOrigin
+          scanOrigin: scanOrigin,
+          localComparables: buildValueChartComparables(
+            id,
+            String(meta.title || item.title || ''),
+            maybePrice,
+            String(meta.category || item.category || ''),
+            meta.rating,
+            meta.reviewCount
+          )
         });
       });
     }
@@ -580,6 +599,51 @@ function resolveValuePointUrl(point, context) {
   var store = String(context.store || lastRenderedStore || (storeEl && storeEl.value) || '').toLowerCase();
   var origin = String(context.scanOrigin || lastRenderedScanOrigin || lastScanOrigin || '');
   return buildFallbackLink(title, store, origin);
+}
+
+function buildValueChartComparables(currentId, currentTitle, currentPrice, currentCategory, currentRating, currentReviewCount) {
+  var comparables = [];
+  var seen = {};
+
+  function addComparable(raw) {
+    if (!raw || typeof raw !== 'object') return;
+    var id = String(raw.id || '').trim();
+    var title = String(raw.title || '').trim();
+    var key = id || normalizeTitleKey(title);
+    if (!key || seen[key]) return;
+    var price = parseNumericPrice(raw.price);
+    if (price == null || !isFinite(price) || price <= 0) return;
+    seen[key] = true;
+    comparables.push({
+      id: id || key,
+      title: title || 'Product',
+      price: Number(price),
+      rating: parseNumericPrice(raw.rating),
+      reviewCount: parseNumericPrice(raw.reviewCount || raw.reviews_count || raw.review_count || raw.reviews),
+      url: raw.url ? String(raw.url) : null,
+      category: raw.category ? String(raw.category) : null
+    });
+  }
+
+  if (Array.isArray(pageCatalog) && pageCatalog.length > 0) {
+    pageCatalog.forEach(addComparable);
+  }
+
+  if (comparables.length < 5 && Array.isArray(lastRenderedCards) && lastRenderedCards.length > 0) {
+    lastRenderedCards.forEach(addComparable);
+  }
+
+  addComparable({
+    id: currentId,
+    title: currentTitle,
+    price: currentPrice,
+    rating: currentRating,
+    reviewCount: currentReviewCount,
+    category: currentCategory,
+    url: (currentId && lastResultUrlById[currentId]) ? lastResultUrlById[currentId] : null
+  });
+
+  return comparables;
 }
 
 recommendBtn.addEventListener('click', async function () {
