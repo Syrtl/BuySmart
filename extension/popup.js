@@ -1,18 +1,3 @@
-/**
- * @typedef {{label: string, date: string, price: number}} PricePoint
- * @typedef {{
- *   productId: string,
- *   currency: string,
- *   weeks: number,
- *   points: PricePoint[],
-  *   min: number,
-  *   max: number,
- *   current: number,
- *   lastUpdated: string,
- *   source: 'mock'|'cached'
- * }} PriceHistoryResponse
- */
-
 const STORAGE_KEY_API_BASE = 'procurewise_api_base';
 const STORAGE_KEY_PAGE_CATALOG = 'procurewise_page_catalog';
 const STORAGE_KEY_LAST_SESSION = 'procurewise_last_session';
@@ -33,13 +18,6 @@ const scanPageBtn = document.getElementById('scanPage');
 const scanStatusEl = document.getElementById('scanStatus');
 const clearCatalogLink = document.getElementById('clearCatalog');
 const clearSessionLink = document.getElementById('clearSession');
-const historyProductIdEl = document.getElementById('historyProductId');
-const loadPriceHistoryBtn = document.getElementById('loadPriceHistory');
-const priceHistoryStatusEl = document.getElementById('priceHistoryStatus');
-const priceHistoryStatsEl = document.getElementById('priceHistoryStats');
-const priceHistoryChartWrapEl = document.getElementById('priceHistoryChartWrap');
-const priceHistoryChartEl = document.getElementById('priceHistoryChart');
-const priceHistoryTooltipEl = document.getElementById('priceHistoryTooltip');
 
 let pageCatalog = [];
 let lastRequestDurationMs = null;
@@ -49,8 +27,7 @@ let lastAssistantMode = null;
 let sessionPollTimer = null;
 let lastScanOrigin = '';
 let lastResultPriceById = {};
-let lastAutoHistoryKey = '';
-let lastHistoryRenderState = null;
+let priceHistoryModal = null;
 
 function getApiBase() {
   const v = (apiBaseEl && apiBaseEl.value && apiBaseEl.value.trim()) || '';
@@ -223,29 +200,102 @@ function renderResults(items, urlMap, urlTitleMap, store, scanOrigin) {
   scanOrigin = scanOrigin || '';
   items.forEach(function (item) {
     var id = String(item.id || '').trim();
-    if (id) {
-      var maybePrice = parseNumericPrice(item.price);
-      if (maybePrice != null) lastResultPriceById[id] = maybePrice;
-    }
+    var maybePrice = parseNumericPrice(item.price);
+    if (id && maybePrice != null) lastResultPriceById[id] = maybePrice;
+
     const li = document.createElement('li');
-    const title = escapeHtml(compactDisplayTitle(item.title || '') || (item.title || ''));
+    li.className = 'product-card';
+
+    const main = document.createElement('div');
+    main.className = 'product-card-main';
+
+    const info = document.createElement('div');
+    info.className = 'product-info';
+
+    const titleContainer = document.createElement('div');
+    titleContainer.className = 'title';
+    const titleText = compactDisplayTitle(item.title || '') || (item.title || '');
     const resolvedUrl = resolveItemUrl(item, urlMap, urlTitleMap, store, scanOrigin);
-    const titleHtml = resolvedUrl
-      ? '<a href="' + escapeHtml(resolvedUrl) + '" target="_blank" rel="noopener noreferrer">' + title + '</a>'
-      : title;
-    const priceStr = item.price != null && !isNaN(item.price) ? '$' + Number(item.price).toFixed(2) : '—';
+    if (resolvedUrl) {
+      const link = document.createElement('a');
+      link.href = resolvedUrl;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = titleText;
+      titleContainer.appendChild(link);
+    } else {
+      titleContainer.textContent = titleText;
+    }
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const priceStr = maybePrice != null ? ('$' + Number(maybePrice).toFixed(2)) : '—';
+    const scorePart = item.score != null ? (' · score ' + Number(item.score).toFixed(2)) : '';
+    meta.textContent = priceStr + ' · ' + String(item.category || '—') + scorePart;
+
+    const why = document.createElement('div');
+    why.className = 'why';
     const bullets = (item.score_explanation && item.score_explanation.length)
       ? (Array.isArray(item.score_explanation) ? item.score_explanation.join(' ') : item.score_explanation)
       : (item.why || '');
-    li.innerHTML = [
-      '<span class="title">' + titleHtml + '</span>',
-      '<div class="meta">',
-      '  ' + priceStr,
-      '  · ' + escapeHtml(item.category || '—'),
-      (item.score != null ? '  <span class="score">score ' + Number(item.score).toFixed(2) + '</span>' : ''),
-      '</div>',
-      '<div class="why">' + escapeHtml(bullets) + '</div>'
-    ].join('');
+    why.textContent = bullets;
+
+    info.appendChild(titleContainer);
+    info.appendChild(meta);
+    info.appendChild(why);
+
+    const actions = document.createElement('div');
+    actions.className = 'product-actions';
+
+    if (resolvedUrl) {
+      const openLink = document.createElement('a');
+      openLink.className = 'action-btn';
+      openLink.href = resolvedUrl;
+      openLink.target = '_blank';
+      openLink.rel = 'noopener noreferrer';
+      openLink.textContent = 'Open';
+      actions.appendChild(openLink);
+    } else {
+      const openDisabled = document.createElement('button');
+      openDisabled.type = 'button';
+      openDisabled.className = 'action-btn disabled';
+      openDisabled.disabled = true;
+      openDisabled.textContent = 'Open';
+      actions.appendChild(openDisabled);
+    }
+
+    const priceBtn = document.createElement('button');
+    priceBtn.type = 'button';
+    priceBtn.className = 'action-btn secondary';
+    priceBtn.textContent = '📈 3M Price';
+    if (!id) {
+      priceBtn.disabled = true;
+      priceBtn.classList.add('disabled');
+    } else {
+      priceBtn.addEventListener('click', function () {
+        if (!priceHistoryModal) {
+          showStatus('Price history modal is unavailable.', 'error');
+          return;
+        }
+        priceHistoryModal.open({
+          productId: id,
+          currentPrice: maybePrice,
+          title: String(item.title || '')
+        });
+      });
+    }
+    actions.appendChild(priceBtn);
+
+    const explainBtn = document.createElement('button');
+    explainBtn.type = 'button';
+    explainBtn.className = 'action-btn secondary disabled';
+    explainBtn.disabled = true;
+    explainBtn.textContent = 'Explain';
+    actions.appendChild(explainBtn);
+
+    main.appendChild(info);
+    main.appendChild(actions);
+    li.appendChild(main);
     resultsEl.appendChild(li);
   });
 }
@@ -255,329 +305,6 @@ function escapeHtml(s) {
   const div = document.createElement('div');
   div.textContent = s;
   return div.innerHTML;
-}
-
-function showHistoryStatus(message, type) {
-  if (!priceHistoryStatusEl) return;
-  priceHistoryStatusEl.textContent = message || '';
-  priceHistoryStatusEl.className = 'history-status ' + (type || '');
-  priceHistoryStatusEl.classList.remove('hidden');
-}
-
-function hideHistoryStatus() {
-  if (!priceHistoryStatusEl) return;
-  priceHistoryStatusEl.classList.add('hidden');
-}
-
-function setHistoryStats(text) {
-  if (!priceHistoryStatsEl) return;
-  if (!text) {
-    priceHistoryStatsEl.textContent = '';
-    priceHistoryStatsEl.classList.add('hidden');
-    return;
-  }
-  priceHistoryStatsEl.textContent = text;
-  priceHistoryStatsEl.classList.remove('hidden');
-}
-
-function formatMoney(value, currency) {
-  var n = Number(value);
-  if (!isFinite(n)) return '—';
-  var code = currency || 'USD';
-  try {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: code, maximumFractionDigits: 2 }).format(n);
-  } catch (_) {
-    return '$' + n.toFixed(2);
-  }
-}
-
-function formatAxisMoney(value) {
-  var n = Number(value);
-  if (!isFinite(n)) return '$0';
-  if (Math.abs(n - Math.round(n)) < 0.005) return '$' + String(Math.round(n));
-  return '$' + n.toFixed(2);
-}
-
-function hideHistoryTooltip() {
-  if (!priceHistoryTooltipEl) return;
-  priceHistoryTooltipEl.classList.add('hidden');
-}
-
-function showHistoryTooltip(point, x, y, currency) {
-  if (!priceHistoryTooltipEl || !priceHistoryChartWrapEl) return;
-  priceHistoryTooltipEl.innerHTML = [
-    escapeHtml(String(point.label || '')),
-    ' · ',
-    escapeHtml(String(point.date || '')),
-    '<br>',
-    escapeHtml(formatMoney(point.price, currency || 'USD'))
-  ].join('');
-  priceHistoryTooltipEl.style.left = x + 'px';
-  priceHistoryTooltipEl.style.top = y + 'px';
-  priceHistoryTooltipEl.classList.remove('hidden');
-}
-
-function renderPriceHistoryChart(points, currency) {
-  if (!priceHistoryChartEl || !priceHistoryChartWrapEl) return;
-  hideHistoryTooltip();
-  lastHistoryRenderState = null;
-  if (!Array.isArray(points) || points.length === 0) {
-    priceHistoryChartEl.innerHTML = '';
-    priceHistoryChartWrapEl.classList.add('hidden');
-    return;
-  }
-
-  var width = Math.max(360, Math.round((priceHistoryChartWrapEl.clientWidth || 360) - 2));
-  var height = 170;
-  var padL = 40;
-  var padR = 10;
-  var padT = 12;
-  var padB = 30;
-  var innerW = width - padL - padR;
-  var innerH = height - padT - padB;
-  var prices = points.map(function (p) { return Number(p.price); }).filter(function (n) { return isFinite(n); });
-  if (prices.length === 0) {
-    priceHistoryChartEl.innerHTML = '';
-    priceHistoryChartWrapEl.classList.add('hidden');
-    return;
-  }
-  var min = Math.min.apply(null, prices);
-  var max = Math.max.apply(null, prices);
-  var spread = Math.max(0.01, max - min);
-  var padSpread = spread * 0.08;
-  min -= padSpread;
-  max += padSpread;
-  var range = Math.max(0.01, max - min);
-
-  function xAt(i) {
-    if (prices.length <= 1) return padL;
-    return padL + ((innerW * i) / (prices.length - 1));
-  }
-  function yAt(v) {
-    var t = (Number(v) - min) / range;
-    return (height - padB) - (t * innerH);
-  }
-
-  var pointPairs = [];
-  var circles = [];
-  var xLabels = [];
-  var xPoints = [];
-  for (var i = 0; i < prices.length; i++) {
-    var px = xAt(i);
-    var py = yAt(prices[i]);
-    xPoints.push(px);
-    pointPairs.push(px.toFixed(2) + ',' + py.toFixed(2));
-    circles.push('<circle cx="' + px.toFixed(2) + '" cy="' + py.toFixed(2) + '" r="2.3" fill="#1565c0"/>');
-    var xLabel = points[i] && points[i].label ? String(points[i].label) : ((prices.length - i - 1) + 'w ago');
-    xLabels.push('<text x="' + px.toFixed(2) + '" y="' + (height - 10) + '" font-size="8" text-anchor="middle" fill="#5f6b7a">' + escapeHtml(xLabel) + '</text>');
-  }
-  var yTicks = [];
-  var yTickCount = 4;
-  for (var t = 0; t <= yTickCount; t++) {
-    var ratio = t / yTickCount;
-    var v = max - (range * ratio);
-    var y = yAt(v);
-    yTicks.push('<line x1="' + padL + '" y1="' + y.toFixed(2) + '" x2="' + (width - padR) + '" y2="' + y.toFixed(2) + '" stroke="#e8edf5" stroke-width="1"/>');
-    yTicks.push('<text x="' + (padL - 4) + '" y="' + (y + 3).toFixed(2) + '" font-size="8" text-anchor="end" fill="#66758a">' + escapeHtml(formatAxisMoney(v)) + '</text>');
-  }
-
-  priceHistoryChartEl.setAttribute('viewBox', '0 0 ' + width + ' ' + height);
-  priceHistoryChartEl.innerHTML = [
-    yTicks.join(''),
-    '<line x1="' + padL + '" y1="' + (height - padB) + '" x2="' + (width - padR) + '" y2="' + (height - padB) + '" stroke="#d7dce5" stroke-width="1"/>',
-    '<line x1="' + padL + '" y1="' + padT + '" x2="' + padL + '" y2="' + (height - padB) + '" stroke="#d7dce5" stroke-width="1"/>',
-    '<polyline fill="none" stroke="#0d47a1" stroke-width="2" points="' + pointPairs.join(' ') + '"/>',
-    circles.join(''),
-    xLabels.join('')
-  ].join('');
-  priceHistoryChartWrapEl.classList.remove('hidden');
-
-  lastHistoryRenderState = {
-    width: width,
-    height: height,
-    xPoints: xPoints,
-    points: points.slice(),
-    currency: currency || 'USD'
-  };
-}
-
-function localMockPriceHistory(productId, weeks, currentPrice) {
-  var nWeeks = Math.max(1, Number(weeks || 13));
-  var base = Number(currentPrice);
-  if (!isFinite(base) || base <= 0) base = 100;
-  var floor = Math.max(1, base * 0.75);
-  var ceil = Math.max(floor + 0.01, base * 1.25);
-  var seed = 0;
-  var text = String(productId || '') + '|' + String(nWeeks) + '|' + String(base.toFixed ? base.toFixed(2) : base);
-  for (var i = 0; i < text.length; i++) {
-    seed = ((seed * 31) + text.charCodeAt(i)) >>> 0;
-  }
-  function rand() {
-    seed = (seed * 1664525 + 1013904223) >>> 0;
-    return seed / 4294967296;
-  }
-  var value = Math.max(floor, Math.min(ceil, base * (0.95 + (rand() * 0.1))));
-  var effects = {};
-  var dips = {};
-  var eventCount = rand() < 0.72 ? 1 : 2;
-  var starts = [];
-  var candidates = [];
-  for (var c = 1; c < Math.max(2, nWeeks - 2); c++) candidates.push(c);
-  for (var s = candidates.length - 1; s > 0; s--) {
-    var j = Math.floor(rand() * (s + 1));
-    var tmp = candidates[s];
-    candidates[s] = candidates[j];
-    candidates[j] = tmp;
-  }
-  for (var ci = 0; ci < candidates.length && starts.length < eventCount; ci++) {
-    var candidate = candidates[ci];
-    var near = false;
-    for (var si = 0; si < starts.length; si++) {
-      if (Math.abs(starts[si] - candidate) < 3) near = true;
-    }
-    if (!near) starts.push(candidate);
-  }
-  starts.sort(function (a, b) { return a - b; });
-  starts.forEach(function (start) {
-    var dipPct = 0.05 + (rand() * 0.10);
-    effects[start] = (effects[start] || 0) - dipPct;
-    dips[start] = true;
-    var recoveryWeeks = rand() < 0.6 ? 1 : 2;
-    var totalRecovery = dipPct * (0.55 + (rand() * 0.30));
-    if (recoveryWeeks === 1) {
-      if (start + 1 < nWeeks) effects[start + 1] = (effects[start + 1] || 0) + totalRecovery;
-    } else {
-      var first = totalRecovery * (0.45 + (rand() * 0.20));
-      var second = totalRecovery - first;
-      if (start + 1 < nWeeks) effects[start + 1] = (effects[start + 1] || 0) + first;
-      if (start + 2 < nWeeks) effects[start + 2] = (effects[start + 2] || 0) + second;
-    }
-  });
-
-  var points = [];
-  var now = new Date();
-  var anchor = new Date(now);
-  var daysSinceSunday = (anchor.getDay() + 0) % 7;
-  anchor.setDate(anchor.getDate() - daysSinceSunday);
-
-  for (var w = 0; w < nWeeks; w++) {
-    var baseChange = 0.005 + (rand() * 0.025);
-    var drift = (rand() < 0.5 ? -1 : 1) * baseChange;
-    var reversion = ((base - value) / base) * 0.30;
-    var delta = drift + reversion + (effects[w] || 0);
-    if (dips[w]) {
-      if (delta < -0.20) delta = -0.20;
-    } else {
-      if (delta > 0.07) delta = 0.07;
-      if (delta < -0.07) delta = -0.07;
-    }
-    value = value * (1 + delta);
-    value = Math.max(floor, Math.min(ceil, value));
-
-    var weeksAgo = nWeeks - w - 1;
-    var dt = new Date(anchor);
-    dt.setDate(anchor.getDate() - (weeksAgo * 7));
-    points.push({
-      label: weeksAgo <= 0 ? 'Now' : (weeksAgo + 'w ago'),
-      date: dt.toISOString().slice(0, 10),
-      price: Number(value.toFixed(2))
-    });
-  }
-  return points;
-}
-
-function renderPriceHistoryResponse(data) {
-  if (!data || !Array.isArray(data.points)) return;
-  renderPriceHistoryChart(data.points, data.currency);
-  var stats = [
-    'Min: ' + formatMoney(data.min, data.currency),
-    'Max: ' + formatMoney(data.max, data.currency),
-    'Current: ' + formatMoney(data.current, data.currency),
-    'Source: ' + String(data.source || 'mock')
-  ].join(' · ');
-  setHistoryStats(stats);
-}
-
-function onHistoryMouseMove(evt) {
-  if (!lastHistoryRenderState || !priceHistoryChartWrapEl) {
-    hideHistoryTooltip();
-    return;
-  }
-  var rect = priceHistoryChartWrapEl.getBoundingClientRect();
-  if (!rect.width || !rect.height) {
-    hideHistoryTooltip();
-    return;
-  }
-  var xView = ((evt.clientX - rect.left) / rect.width) * lastHistoryRenderState.width;
-  var nearestIndex = 0;
-  var nearestDistance = Number.POSITIVE_INFINITY;
-  for (var i = 0; i < lastHistoryRenderState.xPoints.length; i++) {
-    var d = Math.abs(lastHistoryRenderState.xPoints[i] - xView);
-    if (d < nearestDistance) {
-      nearestDistance = d;
-      nearestIndex = i;
-    }
-  }
-  var point = lastHistoryRenderState.points[nearestIndex];
-  if (!point) {
-    hideHistoryTooltip();
-    return;
-  }
-  var tooltipX = ((lastHistoryRenderState.xPoints[nearestIndex] / lastHistoryRenderState.width) * rect.width);
-  var tooltipY = Math.max(20, evt.clientY - rect.top - 6);
-  showHistoryTooltip(point, tooltipX, tooltipY, lastHistoryRenderState.currency);
-}
-
-function lookupResultPrice(productId) {
-  if (!productId) return null;
-  if (Object.prototype.hasOwnProperty.call(lastResultPriceById, productId)) {
-    return lastResultPriceById[productId];
-  }
-  return null;
-}
-
-async function loadPriceHistory(productId, currentPrice) {
-  var id = String(productId || '').trim();
-  if (!id) {
-    showHistoryStatus('Enter product ID first.', 'error');
-    return;
-  }
-  if (loadPriceHistoryBtn) loadPriceHistoryBtn.disabled = true;
-  showHistoryStatus('Loading price history…', 'loading');
-  try {
-    var apiBase = getApiBase();
-    var url = apiBase + '/api/price-history?productId=' + encodeURIComponent(id) + '&weeks=13';
-    var priceHint = currentPrice;
-    if (priceHint == null) priceHint = lookupResultPrice(id);
-    if (priceHint != null && isFinite(Number(priceHint))) {
-      url += '&currentPrice=' + encodeURIComponent(String(Number(priceHint)));
-    }
-    var res = await fetchWithTimeout(url, { method: 'GET' }, 10000);
-    if (!res.ok) {
-      var raw = await res.text();
-      throw new Error('Price history unavailable (HTTP ' + res.status + '): ' + safePreview(raw));
-    }
-    /** @type {PriceHistoryResponse} */
-    var data = await res.json();
-    renderPriceHistoryResponse(data);
-    showHistoryStatus('Updated for ' + id + '.', '');
-  } catch (e) {
-    var fallbackPoints = localMockPriceHistory(id, 13, currentPrice);
-    renderPriceHistoryResponse({
-      productId: id,
-      currency: 'USD',
-      weeks: 13,
-      points: fallbackPoints,
-      min: Math.min.apply(null, fallbackPoints.map(function (p) { return p.price; })),
-      max: Math.max.apply(null, fallbackPoints.map(function (p) { return p.price; })),
-      current: fallbackPoints[fallbackPoints.length - 1].price,
-      lastUpdated: new Date().toISOString(),
-      source: 'mock'
-    });
-    showHistoryStatus('Server unavailable. Showing local demo history.', 'error');
-  } finally {
-    if (loadPriceHistoryBtn) loadPriceHistoryBtn.disabled = false;
-  }
 }
 
 function fetchWithTimeout(url, options, timeoutMs) {
@@ -657,17 +384,6 @@ function applySessionState(session, opts) {
   var urlTitleMap = (session.urlTitleMap && typeof session.urlTitleMap === 'object') ? session.urlTitleMap : {};
   var renderStore = String(session.store || (storeEl ? storeEl.value : '') || '').toLowerCase();
   renderResults(results, urlMap, urlTitleMap, renderStore, lastScanOrigin);
-  if (!session.pending && Array.isArray(results) && results.length > 0) {
-    var top = results[0] || {};
-    var topId = String(top.id || '').trim();
-    var topPrice = parseNumericPrice(top.price);
-    if (historyProductIdEl && topId) historyProductIdEl.value = topId;
-    var key = topId + ':' + String(topPrice != null ? topPrice : '');
-    if (topId && key !== lastAutoHistoryKey) {
-      lastAutoHistoryKey = key;
-      loadPriceHistory(topId, topPrice);
-    }
-  }
   updateDebugInfo();
 }
 
@@ -737,7 +453,6 @@ function buildCatalogOverridePayload() {
 function setButtonsDisabled(disabled) {
   recommendBtn.disabled = disabled;
   if (scanPageBtn) scanPageBtn.disabled = disabled;
-  if (loadPriceHistoryBtn) loadPriceHistoryBtn.disabled = disabled;
   var tc = document.getElementById('testConnection');
   if (tc) tc.disabled = disabled;
   var dp = document.getElementById('demoPreset');
@@ -886,25 +601,18 @@ if (testConnectionBtn) {
   });
 }
 
-if (loadPriceHistoryBtn) {
-  loadPriceHistoryBtn.addEventListener('click', async function () {
-    var id = historyProductIdEl ? historyProductIdEl.value : '';
-    var price = lookupResultPrice(String(id || '').trim());
-    await loadPriceHistory(id, price);
-  });
-}
-
-if (priceHistoryChartWrapEl) {
-  priceHistoryChartWrapEl.addEventListener('mousemove', onHistoryMouseMove);
-  priceHistoryChartWrapEl.addEventListener('mouseleave', hideHistoryTooltip);
-}
-
 document.addEventListener('DOMContentLoaded', async function () {
   loadSavedApiBase();
   loadPageCatalog();
-  hideHistoryStatus();
-  setHistoryStats('');
-  renderPriceHistoryChart([]);
+  if (window.PriceHistoryModal) {
+    priceHistoryModal = new window.PriceHistoryModal({
+      getApiBase: getApiBase,
+      fetchWithTimeout: fetchWithTimeout,
+      onError: function (message) {
+        if (message) showStatus(String(message), 'error');
+      }
+    });
+  }
   var session = await loadLastSession();
   if (session) {
     applySessionState(session, { restoreInput: true });
@@ -999,12 +707,8 @@ if (clearSessionLink) {
     lastOverrideUsed = null;
     lastAssistantMode = null;
     lastResultPriceById = {};
-    lastAutoHistoryKey = '';
     if (queryEl) queryEl.value = '';
-    if (historyProductIdEl) historyProductIdEl.value = '';
-    hideHistoryStatus();
-    setHistoryStats('');
-    renderPriceHistoryChart([]);
+    if (priceHistoryModal) priceHistoryModal.close();
     renderResults([], {}, {}, (storeEl && storeEl.value) ? String(storeEl.value).toLowerCase() : '', lastScanOrigin);
     hideStatus();
     updateDebugInfo();

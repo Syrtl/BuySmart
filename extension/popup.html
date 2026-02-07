@@ -29,25 +29,29 @@
       <p class="clear-row"><a href="#" id="clearSession" class="clear-link">Clear prompt & results</a></p>
     </div>
     <div id="status" class="status hidden"></div>
-    <section class="history-section">
-      <h2>Price History (3 months)</h2>
-      <div class="history-controls">
-        <input type="text" id="historyProductId" placeholder="Product ID (auto-filled from top result)">
-        <button type="button" id="loadPriceHistory" class="secondary">Load Price History</button>
-      </div>
-      <p id="priceHistoryStatus" class="history-status hidden"></p>
-      <p id="priceHistoryStats" class="history-stats hidden"></p>
-      <div id="priceHistoryChartWrap" class="history-chart-wrap hidden">
-        <svg id="priceHistoryChart" viewBox="0 0 360 140" preserveAspectRatio="none"></svg>
-        <div id="priceHistoryTooltip" class="history-tooltip hidden"></div>
-      </div>
-    </section>
     <details class="debug-details">
       <summary>Debug</summary>
       <p id="debugInfo" class="debug-info">—</p>
     </details>
     <ul id="results" class="results"></ul>
   </div>
+  <div id="priceHistoryModal" class="price-modal hidden">
+    <div class="price-modal-backdrop" data-close="1"></div>
+    <div class="price-modal-panel" role="dialog" aria-modal="true" aria-labelledby="priceHistoryModalTitle">
+      <div class="price-modal-header">
+        <h2 id="priceHistoryModalTitle">Price History — last 3 months</h2>
+        <button type="button" id="priceHistoryModalClose" class="modal-close-btn" aria-label="Close">×</button>
+      </div>
+      <p id="priceHistoryModalProduct" class="price-modal-product hidden"></p>
+      <p id="priceHistoryModalStatus" class="price-modal-status hidden"></p>
+      <div id="priceHistoryModalChartWrap" class="price-modal-chart-wrap hidden">
+        <svg id="priceHistoryModalChart" viewBox="0 0 560 200" preserveAspectRatio="none"></svg>
+        <div id="priceHistoryModalTooltip" class="price-modal-tooltip hidden"></div>
+      </div>
+      <p id="priceHistoryModalStats" class="price-modal-stats hidden"></p>
+    </div>
+  </div>
+  <script src="priceHistoryModal.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
