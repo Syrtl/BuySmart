@@ -292,6 +292,107 @@ button.secondary:hover {
   word-break: break-all;
 }
 
+.best-time-section {
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid #dbe3f1;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.best-time-section h2 {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  color: #0d47a1;
+}
+
+.best-time-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.best-time-controls input[type="text"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.best-time-controls button {
+  margin-top: 0;
+  width: auto;
+  min-width: 96px;
+}
+
+.best-time-status {
+  margin: 8px 0 0 0;
+  font-size: 12px;
+  color: #546e7a;
+}
+
+.best-time-status.loading {
+  color: #1565c0;
+}
+
+.best-time-status.error {
+  color: #c62828;
+}
+
+.best-time-status.hidden {
+  display: none;
+}
+
+.best-time-result {
+  margin-top: 8px;
+  border-top: 1px solid #e8edf5;
+  padding-top: 8px;
+}
+
+.best-time-result.hidden {
+  display: none;
+}
+
+.best-time-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  border-radius: 999px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.2px;
+}
+
+.best-time-badge.buy-now {
+  background: #e7f6ea;
+  color: #1b5e20;
+  border: 1px solid #a5d6a7;
+}
+
+.best-time-badge.wait {
+  background: #fff4e5;
+  color: #8a4b08;
+  border: 1px solid #ffcc80;
+}
+
+.best-time-deal {
+  margin: 8px 0 0 0;
+  font-size: 12px;
+  color: #455a64;
+}
+
+.best-time-explanation {
+  margin: 8px 0 0 16px;
+  padding: 0;
+  font-size: 11px;
+  color: #4b5563;
+}
+
 .price-modal {
   position: fixed;
   inset: 0;

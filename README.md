@@ -4,7 +4,7 @@ A Chrome extension (Manifest V3) that calls a FastAPI backend to recommend produ
 
 ---
 
-## Demo Kit (UIC Hackathon)
+## Demo Kit (SparkHacks)
 
 - **The backend is deployed on Railway.**  
 - **All API keys are stored exclusively in Railway environment variables.**  
@@ -193,7 +193,12 @@ Server runs at **http://localhost:8000**. Docs: http://localhost:8000/docs
   - Query: `productId=XXX&weeks=13` (optional: `currentPrice=123.45`; `days=90` still supported)
   - Response: `{ productId, currency, weeks, points[13], min, max, current, lastUpdated, source }`
 
+- **GET /api/best-time-to-buy**
+  - Query: `productId=XXX` (optional: `currentPrice`, `title`, `category`)
+  - Response: `{ productId, recommendation, confidence, currentPrice, low30, low90, deltaFromLow30Pct, deltaFromLow90Pct, trend, nextDealWindow, explanation }`
+
 Price history is mock-generated & cached for demo; consistent for 24 hours.
+Best-time-to-buy is heuristic and category-calendar based for demo purposes; it is not a guarantee of future pricing.
 
 ## Tech stack
 

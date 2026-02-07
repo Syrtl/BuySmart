@@ -29,6 +29,19 @@
       <p class="clear-row"><a href="#" id="clearSession" class="clear-link">Clear prompt & results</a></p>
     </div>
     <div id="status" class="status hidden"></div>
+    <section class="best-time-section">
+      <h2>Best Time To Buy</h2>
+      <div class="best-time-controls">
+        <input type="text" id="bestTimeProductId" placeholder="Product ID">
+        <button type="button" id="bestTimeAnalyze" class="secondary">Analyze</button>
+      </div>
+      <p id="bestTimeStatus" class="best-time-status hidden"></p>
+      <div id="bestTimeResult" class="best-time-result hidden">
+        <span id="bestTimeBadge" class="best-time-badge"></span>
+        <p id="bestTimeDeal" class="best-time-deal"></p>
+        <ul id="bestTimeExplanation" class="best-time-explanation"></ul>
+      </div>
+    </section>
     <details class="debug-details">
       <summary>Debug</summary>
       <p id="debugInfo" class="debug-info">—</p>

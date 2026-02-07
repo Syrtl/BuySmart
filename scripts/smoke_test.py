@@ -169,6 +169,53 @@ def main():
         print("FAIL: /api/price-history days=90 compatibility —", e)
         failed += 1
 
+    # 0c) /api/best-time-to-buy returns expected structure and enums
+    try:
+        status, data, raw = _get_with_status("/api/best-time-to-buy?productId=demo-asin-3&currentPrice=219.99&title=Gaming%20Monitor", timeout=TIMEOUT)
+        if status != 200:
+            print("FAIL: /api/best-time-to-buy — expected 200, got", status, safe_preview(raw))
+            failed += 1
+        else:
+            required = (
+                "productId",
+                "recommendation",
+                "confidence",
+                "currentPrice",
+                "low30",
+                "low90",
+                "deltaFromLow30Pct",
+                "deltaFromLow90Pct",
+                "trend",
+                "nextDealWindow",
+                "explanation",
+            )
+            missing = [k for k in required if k not in (data or {})]
+            if missing:
+                print("FAIL: /api/best-time-to-buy — missing fields:", missing)
+                failed += 1
+            elif (data or {}).get("recommendation") not in {"buy_now", "wait"}:
+                print("FAIL: /api/best-time-to-buy — invalid recommendation:", (data or {}).get("recommendation"))
+                failed += 1
+            elif (data or {}).get("confidence") not in {"low", "medium", "high"}:
+                print("FAIL: /api/best-time-to-buy — invalid confidence:", (data or {}).get("confidence"))
+                failed += 1
+            elif (data or {}).get("trend") not in {"down", "flat", "up"}:
+                print("FAIL: /api/best-time-to-buy — invalid trend:", (data or {}).get("trend"))
+                failed += 1
+            elif not isinstance((data or {}).get("explanation"), list):
+                print("FAIL: /api/best-time-to-buy — explanation is not a list")
+                failed += 1
+            else:
+                deal = (data or {}).get("nextDealWindow") or {}
+                if "name" not in deal or "approxDateRange" not in deal or "expectedDiscountRangePct" not in deal:
+                    print("FAIL: /api/best-time-to-buy — invalid nextDealWindow payload:", deal)
+                    failed += 1
+                else:
+                    print("PASS: /api/best-time-to-buy — heuristic payload returned")
+    except Exception as e:
+        print("FAIL: /api/best-time-to-buy —", e)
+        failed += 1
+
     # 1) /assistant/recommend "office chair under $150": at least one result contains "chair" (even if over budget); over-budget chair has "Over budget" in score_explanation
     try:
         data = _post("/assistant/recommend", {"user_text": "office chair under $150", "store": "amazon", "k": 5}, timeout=TIMEOUT_RECOMMEND)

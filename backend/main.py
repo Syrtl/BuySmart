@@ -16,6 +16,7 @@ from backend.services.recommender import embeddings_enabled, parse_intent, recom
 from backend.services.explain import build_why
 from backend.services.llm_recommender import recommend_via_llm, recommend_from_catalog
 from backend.services.price_history import PriceHistoryResponse, get_price_history
+from backend.services.best_time_to_buy import BestTimeToBuyResponse, analyze_best_time_to_buy
 
 app = FastAPI(title="ProcureWise API", version="0.1.0")
 
@@ -296,6 +297,7 @@ def root():
         "recommend": "POST /recommend",
         "assistant": "POST /assistant/recommend",
         "price_history": "GET /api/price-history?productId=XXX&weeks=13",
+        "best_time_to_buy": "GET /api/best-time-to-buy?productId=XXX",
     }
 
 
@@ -327,6 +329,27 @@ def price_history_endpoint(
         product_id=normalized_product_id,
         weeks=requested_weeks,
         current_price_hint=current_price,
+    )
+
+
+@app.get("/api/best-time-to-buy", response_model=BestTimeToBuyResponse)
+def best_time_to_buy_endpoint(
+    product_id: str | None = Query(None, alias="productId"),
+    current_price: float | None = Query(None, alias="currentPrice"),
+    title: str | None = Query(None),
+    category: str | None = Query(None),
+):
+    normalized_product_id = str(product_id or "").strip()
+    if not normalized_product_id:
+        raise HTTPException(status_code=400, detail="Missing required query parameter: productId")
+    _load_catalogs()
+    return analyze_best_time_to_buy(
+        data_dir=DATA_DIR,
+        catalogs=CATALOGS,
+        product_id=normalized_product_id,
+        current_price_hint=current_price,
+        title=title,
+        category_hint=category,
     )
 
 

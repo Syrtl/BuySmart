@@ -1,3 +1,19 @@
+/**
+ * @typedef {{
+ *   productId: string,
+ *   recommendation: 'buy_now'|'wait',
+ *   confidence: 'low'|'medium'|'high',
+ *   currentPrice: number,
+ *   low30: number,
+ *   low90: number,
+ *   deltaFromLow30Pct: number,
+ *   deltaFromLow90Pct: number,
+ *   trend: 'down'|'flat'|'up',
+ *   nextDealWindow: { name: string, approxDateRange: string, expectedDiscountRangePct: [number, number] },
+ *   explanation: string[]
+ * }} BestTimeToBuyResponse
+ */
+
 const STORAGE_KEY_API_BASE = 'procurewise_api_base';
 const STORAGE_KEY_PAGE_CATALOG = 'procurewise_page_catalog';
 const STORAGE_KEY_LAST_SESSION = 'procurewise_last_session';
@@ -18,6 +34,13 @@ const scanPageBtn = document.getElementById('scanPage');
 const scanStatusEl = document.getElementById('scanStatus');
 const clearCatalogLink = document.getElementById('clearCatalog');
 const clearSessionLink = document.getElementById('clearSession');
+const bestTimeProductIdEl = document.getElementById('bestTimeProductId');
+const bestTimeAnalyzeBtn = document.getElementById('bestTimeAnalyze');
+const bestTimeStatusEl = document.getElementById('bestTimeStatus');
+const bestTimeResultEl = document.getElementById('bestTimeResult');
+const bestTimeBadgeEl = document.getElementById('bestTimeBadge');
+const bestTimeDealEl = document.getElementById('bestTimeDeal');
+const bestTimeExplanationEl = document.getElementById('bestTimeExplanation');
 
 let pageCatalog = [];
 let lastRequestDurationMs = null;
@@ -27,6 +50,7 @@ let lastAssistantMode = null;
 let sessionPollTimer = null;
 let lastScanOrigin = '';
 let lastResultPriceById = {};
+let lastResultMetaById = {};
 let priceHistoryModal = null;
 
 function getApiBase() {
@@ -122,6 +146,109 @@ function safePreview(text) {
   return String(text || '').replace(/\s+/g, ' ').trim().slice(0, 200);
 }
 
+function showBestTimeStatus(message, type) {
+  if (!bestTimeStatusEl) return;
+  if (!message) {
+    bestTimeStatusEl.textContent = '';
+    bestTimeStatusEl.className = 'best-time-status hidden';
+    return;
+  }
+  bestTimeStatusEl.textContent = String(message);
+  bestTimeStatusEl.className = 'best-time-status ' + (type || '');
+}
+
+function resetBestTimeResult() {
+  if (bestTimeResultEl) bestTimeResultEl.classList.add('hidden');
+  if (bestTimeBadgeEl) {
+    bestTimeBadgeEl.textContent = '';
+    bestTimeBadgeEl.className = 'best-time-badge';
+  }
+  if (bestTimeDealEl) bestTimeDealEl.textContent = '';
+  if (bestTimeExplanationEl) bestTimeExplanationEl.innerHTML = '';
+}
+
+function renderBestTimeResult(data) {
+  if (!data || !bestTimeResultEl || !bestTimeBadgeEl || !bestTimeDealEl || !bestTimeExplanationEl) return;
+  const isBuy = String(data.recommendation || '') === 'buy_now';
+  bestTimeBadgeEl.textContent = isBuy ? 'Buy now' : 'Wait';
+  bestTimeBadgeEl.className = 'best-time-badge ' + (isBuy ? 'buy-now' : 'wait');
+
+  const deal = data.nextDealWindow || {};
+  const discountRange = Array.isArray(deal.expectedDiscountRangePct) ? deal.expectedDiscountRangePct : [0, 0];
+  const confidence = String(data.confidence || 'low');
+  bestTimeDealEl.textContent =
+    'Next deal window: ' +
+    String(deal.name || 'Unknown') +
+    ' (' +
+    String(deal.approxDateRange || 'Unknown') +
+    '), expected ' +
+    String(discountRange[0]) +
+    '-' +
+    String(discountRange[1]) +
+    '% off. Confidence: ' +
+    confidence +
+    '.';
+
+  bestTimeExplanationEl.innerHTML = '';
+  const bullets = Array.isArray(data.explanation) ? data.explanation : [];
+  bullets.slice(0, 5).forEach(function (line) {
+    const li = document.createElement('li');
+    li.textContent = String(line || '');
+    bestTimeExplanationEl.appendChild(li);
+  });
+  bestTimeResultEl.classList.remove('hidden');
+}
+
+async function analyzeBestTimeToBuy(productId) {
+  const id = String(productId || '').trim();
+  if (!id) {
+    showBestTimeStatus('Enter product ID first.', 'error');
+    resetBestTimeResult();
+    return;
+  }
+  const meta = lastResultMetaById[id] || {};
+  const currentPrice = lastResultPriceById[id];
+  showBestTimeStatus('Analyzing best time to buy…', 'loading');
+  resetBestTimeResult();
+  if (bestTimeAnalyzeBtn) bestTimeAnalyzeBtn.disabled = true;
+
+  try {
+    const apiBase = getApiBase();
+    let url = apiBase + '/api/best-time-to-buy?productId=' + encodeURIComponent(id);
+    if (currentPrice != null && isFinite(Number(currentPrice))) {
+      url += '&currentPrice=' + encodeURIComponent(String(Number(currentPrice)));
+    }
+    if (meta.title) {
+      url += '&title=' + encodeURIComponent(String(meta.title));
+    }
+    if (meta.category) {
+      url += '&category=' + encodeURIComponent(String(meta.category));
+    }
+    const res = await fetchWithTimeout(url, { method: 'GET' }, 10000);
+    const raw = await res.text();
+    if (!res.ok) {
+      throw new Error('HTTP ' + res.status + ': ' + safePreview(raw));
+    }
+    /** @type {BestTimeToBuyResponse|null} */
+    let data = null;
+    try {
+      data = raw ? JSON.parse(raw) : null;
+    } catch (_) {
+      data = null;
+    }
+    if (!data || typeof data !== 'object') {
+      throw new Error('Unexpected response');
+    }
+    renderBestTimeResult(data);
+    showBestTimeStatus('', '');
+  } catch (err) {
+    showBestTimeStatus('Best-time analysis unavailable right now. Check backend and try again.', 'error');
+    if (typeof console !== 'undefined') console.warn(err);
+  } finally {
+    if (bestTimeAnalyzeBtn) bestTimeAnalyzeBtn.disabled = false;
+  }
+}
+
 function normalizeTitleKey(value) {
   return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
@@ -190,8 +317,12 @@ function resolveItemUrl(item, urlMap, urlTitleMap, store, scanOrigin) {
 function renderResults(items, urlMap, urlTitleMap, store, scanOrigin) {
   resultsEl.innerHTML = '';
   lastResultPriceById = {};
+  lastResultMetaById = {};
   if (!items || items.length === 0) {
     resultsEl.innerHTML = '<li class="empty">No recommendations. Try a different query or store.</li>';
+    if (bestTimeProductIdEl) bestTimeProductIdEl.value = '';
+    showBestTimeStatus('', '');
+    resetBestTimeResult();
     return;
   }
   urlMap = urlMap || {};
@@ -202,6 +333,12 @@ function renderResults(items, urlMap, urlTitleMap, store, scanOrigin) {
     var id = String(item.id || '').trim();
     var maybePrice = parseNumericPrice(item.price);
     if (id && maybePrice != null) lastResultPriceById[id] = maybePrice;
+    if (id) {
+      lastResultMetaById[id] = {
+        title: String(item.title || ''),
+        category: String(item.category || '')
+      };
+    }
 
     const li = document.createElement('li');
     li.className = 'product-card';
@@ -298,6 +435,10 @@ function renderResults(items, urlMap, urlTitleMap, store, scanOrigin) {
     li.appendChild(main);
     resultsEl.appendChild(li);
   });
+  const topId = String((items[0] && items[0].id) || '').trim();
+  if (bestTimeProductIdEl && topId) {
+    bestTimeProductIdEl.value = topId;
+  }
 }
 
 function escapeHtml(s) {
@@ -453,6 +594,7 @@ function buildCatalogOverridePayload() {
 function setButtonsDisabled(disabled) {
   recommendBtn.disabled = disabled;
   if (scanPageBtn) scanPageBtn.disabled = disabled;
+  if (bestTimeAnalyzeBtn) bestTimeAnalyzeBtn.disabled = disabled;
   var tc = document.getElementById('testConnection');
   if (tc) tc.disabled = disabled;
   var dp = document.getElementById('demoPreset');
@@ -601,9 +743,26 @@ if (testConnectionBtn) {
   });
 }
 
+if (bestTimeAnalyzeBtn) {
+  bestTimeAnalyzeBtn.addEventListener('click', async function () {
+    await analyzeBestTimeToBuy(bestTimeProductIdEl ? bestTimeProductIdEl.value : '');
+  });
+}
+
+if (bestTimeProductIdEl) {
+  bestTimeProductIdEl.addEventListener('keydown', function (evt) {
+    if (evt.key === 'Enter') {
+      evt.preventDefault();
+      analyzeBestTimeToBuy(bestTimeProductIdEl.value);
+    }
+  });
+}
+
 document.addEventListener('DOMContentLoaded', async function () {
   loadSavedApiBase();
   loadPageCatalog();
+  showBestTimeStatus('', '');
+  resetBestTimeResult();
   if (window.PriceHistoryModal) {
     priceHistoryModal = new window.PriceHistoryModal({
       getApiBase: getApiBase,
@@ -707,7 +866,11 @@ if (clearSessionLink) {
     lastOverrideUsed = null;
     lastAssistantMode = null;
     lastResultPriceById = {};
+    lastResultMetaById = {};
     if (queryEl) queryEl.value = '';
+    if (bestTimeProductIdEl) bestTimeProductIdEl.value = '';
+    showBestTimeStatus('', '');
+    resetBestTimeResult();
     if (priceHistoryModal) priceHistoryModal.close();
     renderResults([], {}, {}, (storeEl && storeEl.value) ? String(storeEl.value).toLowerCase() : '', lastScanOrigin);
     hideStatus();
