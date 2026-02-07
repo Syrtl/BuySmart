@@ -844,12 +844,31 @@
       'Rating: ' + escapeHtml(String(Number(point.rating || 0).toFixed(2))),
       ' | Reviews: ' + escapeHtml(String(Math.round(Number(point.reviewCount || 0))))
     ].join('');
-
-    var tooltipX = (nearest.x / this.chartState.width) * rect.width;
-    var tooltipY = Math.max(26, evt.clientY - rect.top - 8);
-    this.tooltipEl.style.left = tooltipX + 'px';
-    this.tooltipEl.style.top = tooltipY + 'px';
     this.tooltipEl.classList.remove('hidden');
+
+    var anchorX = (nearest.x / this.chartState.width) * rect.width;
+    var anchorY = (nearest.y / this.chartState.height) * rect.height;
+    var tooltipW = this.tooltipEl.offsetWidth || 220;
+    var tooltipH = this.tooltipEl.offsetHeight || 80;
+    var pad = 8;
+
+    var left = anchorX - (tooltipW / 2);
+    if (left < pad) left = pad;
+    if (left + tooltipW > rect.width - pad) left = rect.width - tooltipW - pad;
+
+    var aboveTop = anchorY - tooltipH - 10;
+    var top = aboveTop;
+    if (aboveTop < pad) {
+      top = anchorY + 10;
+    }
+    if (top + tooltipH > rect.height - pad) {
+      top = rect.height - tooltipH - pad;
+    }
+    if (top < pad) top = pad;
+
+    this.tooltipEl.style.left = left + 'px';
+    this.tooltipEl.style.top = top + 'px';
+    this.tooltipEl.style.transform = 'none';
   };
 
   ValueChartModal.prototype.hideTooltip = function () {

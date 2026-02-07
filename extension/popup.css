@@ -405,9 +405,9 @@ button.secondary:hover {
 
 .product-media {
   flex: 0 0 auto;
-  width: 62px;
-  height: 62px;
-  border-radius: 12px;
+  width: 132px;
+  height: 132px;
+  border-radius: 14px;
   overflow: hidden;
   border: 1px solid #dbe3f1;
   background: #fff;
@@ -729,6 +729,12 @@ button.secondary:hover {
   transform: translate(-50%, calc(-100% - 8px));
   white-space: nowrap;
   box-shadow: 0 10px 22px rgba(15, 23, 42, 0.28);
+}
+
+.value-modal-tooltip {
+  z-index: 4;
+  max-width: 300px;
+  white-space: normal;
 }
 
 .price-modal-tooltip.hidden,
