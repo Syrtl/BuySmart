@@ -166,7 +166,7 @@ button.secondary:hover {
 .product-card-main {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
 }
 
@@ -188,19 +188,21 @@ button.secondary:hover {
 .product-actions {
   flex: 0 0 auto;
   display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+  gap: 8px;
+  flex-wrap: nowrap;
+  min-width: 116px;
 }
 
 .action-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: auto;
+  width: 100%;
   margin-top: 0;
-  min-width: 86px;
+  min-width: 0;
   height: 30px;
   padding: 0 10px;
   border-radius: 7px;
