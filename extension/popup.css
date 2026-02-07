@@ -7,9 +7,9 @@
   --bg: #f7f9fc;
   --surface: #ffffff;
   --surface-soft: #f8fbff;
-  --primary: #1e40af;
-  --primary-hover: #1b3a9d;
-  --primary-pressed: #173287;
+  --primary: #3b82f6;
+  --primary-hover: #2563eb;
+  --primary-pressed: #1d4ed8;
   --secondary: #64748b;
   --text: #0f172a;
   --text-muted: #475569;
@@ -31,9 +31,9 @@
   --bg: #0b1220;
   --surface: #111a2c;
   --surface-soft: #142033;
-  --primary: #3b82f6;
-  --primary-hover: #4f8fff;
-  --primary-pressed: #2c6ce0;
+  --primary: #60a5fa;
+  --primary-hover: #7bb5ff;
+  --primary-pressed: #4a94f5;
   --secondary: #94a3b8;
   --text: #e2e8f0;
   --text-muted: #a8b4c7;
@@ -51,13 +51,15 @@
 html {
   width: 570px;
   min-height: 320px;
+  border-radius: 20px;
+  overflow: hidden;
 }
 
 body {
   width: 570px;
   min-height: 320px;
   margin: 0;
-  padding: 0;
+  padding: 8px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
   font-size: 13px;
   line-height: 1.45;
@@ -66,10 +68,22 @@ body {
     radial-gradient(150% 110% at 100% -30%, rgba(30, 64, 175, 0.08), transparent 55%),
     radial-gradient(130% 120% at -20% 110%, rgba(100, 116, 139, 0.1), transparent 50%),
     var(--bg);
+  border-radius: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.16);
+  overflow: hidden;
 }
 
 .container {
   padding: 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(6px);
+  min-height: calc(320px - 16px);
+}
+
+[data-theme="dark"] .container {
+  background: rgba(14, 24, 40, 0.76);
 }
 
 .topbar {
@@ -210,7 +224,7 @@ button {
   padding: 10px 14px;
   border: 1px solid transparent;
   border-radius: var(--radius-md);
-  background: linear-gradient(180deg, #2450d2, var(--primary));
+  background: linear-gradient(180deg, #69a6ff, var(--primary));
   color: #fff;
   font-size: 13px;
   font-weight: 650;
@@ -233,7 +247,7 @@ button:hover {
 
 button:active {
   transform: translateY(0);
-  background: linear-gradient(180deg, #214bc3, var(--primary-pressed));
+  background: linear-gradient(180deg, #5d9ef9, var(--primary-pressed));
   box-shadow: 0 5px 10px rgba(30, 64, 175, 0.2);
 }
 
@@ -467,7 +481,7 @@ button.secondary:hover {
   padding: 0 10px;
   border-radius: var(--radius-sm);
   border: 1px solid transparent;
-  background: linear-gradient(180deg, #2450d2, var(--primary));
+  background: linear-gradient(180deg, #69a6ff, var(--primary));
   color: #fff;
   font-size: 12px;
   font-weight: 650;

@@ -680,8 +680,6 @@ function setButtonsDisabled(disabled) {
   if (scanPageBtn) scanPageBtn.disabled = disabled;
   var tc = document.getElementById('testConnection');
   if (tc) tc.disabled = disabled;
-  var dp = document.getElementById('demoPreset');
-  if (dp) dp.disabled = disabled;
 }
 
 function updateDebugInfo() {
@@ -1032,17 +1030,6 @@ if (clearSessionLink) {
     updateDebugInfo();
     showStatus('Prompt and results cleared', '');
     setTimeout(hideStatus, 1800);
-  });
-}
-
-var demoPresetBtn = document.getElementById('demoPreset');
-if (demoPresetBtn) {
-  demoPresetBtn.addEventListener('click', function () {
-    if (queryEl) queryEl.value = 'office chair under $150';
-    if (storeEl) storeEl.value = 'amazon';
-    saveSessionPatch({ queryText: queryEl ? queryEl.value : '', store: 'amazon' });
-    showStatus('Demo preset applied', '');
-    setTimeout(hideStatus, 2000);
   });
 }
 
