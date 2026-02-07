@@ -103,10 +103,13 @@ def test_assistant_explains_why_top_pick_matches_prompt():
     assert recs
     bullets = " ".join(recs[0].get("score_explanation") or []).lower()
     assert "consultant verdict" in bullets
-    assert ("price" in bullets) or ("budget" in bullets)
+    assert ("what stands out" in bullets) or ("strongest overall pick" in bullets)
     assert "requested keywords" not in bullets
     assert "matches 1/" not in bullets
     assert "feature-level matches" not in bullets
+    assert "$" not in bullets
+    assert "price " not in bullets
+    assert "budget" not in bullets
 
 
 def test_assistant_prioritizes_requested_product_type():

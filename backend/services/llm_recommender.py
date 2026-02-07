@@ -24,10 +24,11 @@ STRICT RULES:
 7) Do not copy noisy scraped strings verbatim (e.g., "Sponsored", duplicated prices, "product page", repeated fragments).
 8) For each recommendation, score_explanation must be EXACTLY 3 bullets (3 strings), each 1 sentence max:
    - Bullet 1: what the customer gets (build/features/design from listing)
-   - Bullet 2: why it fits the request (must-haves/budget tie-in)
-   - Bullet 3: why it is good value at this price
-9) If a detail is missing, say: "Not specified in the listing."
-10) tco.yearly_cost only if lifespan_years exists in catalog (formula: price / lifespan_years). unknowns list missing catalog fields.
+   - Bullet 2: why it fits the request (must-haves/use-case fit)
+   - Bullet 3: value framing without mentioning any exact price or budget
+9) Never mention exact prices, currency symbols, budgets, or numeric price comparisons in score_explanation.
+10) If a detail is missing, say: "Not specified in the listing."
+11) tco.yearly_cost only if lifespan_years exists in catalog (formula: price / lifespan_years). unknowns list missing catalog fields.
 
 REQUIRED JSON SCHEMA (output this and nothing else):
 {
@@ -63,6 +64,7 @@ DEVELOPER_PROMPT = """Reminder:
 - Missing details must be phrased as: "Not specified in the listing."
 - score_explanation must contain exactly 3 short natural bullets (1 sentence each).
 - Never mention score, ranking, keyword match counts, embeddings, variables, or analysis.
+- Never mention exact prices, currency symbols, or budgets in score_explanation.
 - One follow-up question max.
 - JSON only, no extra text."""
 
@@ -120,6 +122,10 @@ _NOISY_LABEL_RE = re.compile(
 )
 _DUP_CURRENCY_RE = re.compile(r"(\$\s*\d+(?:\.\d{1,2})?)\s*(?:\1\s*)+")
 _MONEY_RE = re.compile(r"\$\s*\d+(?:,\d{3})*(?:\.\d{1,2})?")
+_PRICE_WORD_RE = re.compile(
+    r"(?i)\b(?:price|pricing|budget|dollar|dollars|usd|cost|value at this price|"
+    r"цена|бюджет|доллар|стоимость|цене)\b"
+)
 _TECHNICAL_PHRASE_RE = re.compile(
     r"(?i)\b(?:score|scoring|rank|ranking|keyword|keywords|match(?:es)?|embedding|embeddings|variable|analysis|algorithm)\b"
 )
@@ -146,6 +152,7 @@ def _clean_listing_text(value: Any, max_len: int = 1200) -> str:
     text = _DUP_CURRENCY_RE.sub(lambda m: m.group(1), text)
     text = re.sub(r"(?i)(\$\s*\d+(?:,\d{3})*(?:\.\d{1,2})?)(?:\s*[,;:|/\-]?\s*\1)+", r"\1", text)
     text = re.sub(r"(?i)(\$ ?\d+(?:\.\d{1,2})?)(?=\$)", r"\1 ", text)
+    text = _MONEY_RE.sub(" ", text)
     text = re.sub(r"\s+", " ", text).strip(" -|,;:")
     if max_len > 0 and len(text) > max_len:
         text = text[:max_len].rstrip()
@@ -250,7 +257,6 @@ def _fallback_human_bullets(user_text: str, rec: dict[str, Any], safe_item: dict
     safe_item = safe_item or {}
     features = safe_item.get("features") if isinstance(safe_item.get("features"), list) else []
     desc = str(safe_item.get("description") or "").strip()
-    price = safe_item.get("price")
     req = _clean_listing_text(user_text, max_len=100)
 
     if features:
@@ -265,33 +271,22 @@ def _fallback_human_bullets(user_text: str, rec: dict[str, Any], safe_item: dict
     else:
         b2 = "Why it fits your request: it aligns with the intended use based on listed details."
 
-    if price is not None:
-        b3 = _one_sentence(f"Value at this price: for ${float(price):.2f}, it offers a balanced package for this category")
-    else:
-        b3 = "Value at this price: Not specified in the listing."
+    b3 = "Overall value: it presents a balanced, practical choice in its category."
 
     return [b1, b2, b3]
 
 
 def _enforce_single_price_mention(lines: list[str]) -> list[str]:
-    """Keep at most one currency mention across all explanation bullets."""
+    """Remove all price/currency mentions from explanation bullets."""
     if not lines:
         return lines
-    seen_price = False
     out: list[str] = []
     for line in lines:
         text = str(line or "")
         if not text:
             continue
-
-        def _replace_price(match: re.Match[str]) -> str:
-            nonlocal seen_price
-            if not seen_price:
-                seen_price = True
-                return match.group(0)
-            return ""
-
-        text = _MONEY_RE.sub(_replace_price, text)
+        text = _MONEY_RE.sub("", text)
+        text = _PRICE_WORD_RE.sub("", text)
         text = re.sub(r"\s+", " ", text)
         text = re.sub(r"\s+([,.;:!?])", r"\1", text)
         text = re.sub(r"([:;,])\s*([:;,])+", r"\1", text)
@@ -844,26 +839,10 @@ def _buyer_focus_summary(
 
     if language == "ru":
         focus = ", ".join(focus_parts) if focus_parts else "практичность и релевантность задаче"
-        if parsed.get("min_price") is not None and parsed.get("max_price") is not None:
-            price = f"диапазон {_format_money(parsed.get('min_price'))}–{_format_money(parsed.get('max_price'))}"
-        elif parsed.get("budget") is not None:
-            price = f"бюджет до {_format_money(parsed.get('budget'))}"
-        elif parsed.get("target_price") is not None:
-            price = f"ориентир по цене около {_format_money(parsed.get('target_price'))}"
-        else:
-            price = "без жесткого бюджета"
-        return f"{focus}; {price}"
+        return focus
 
     focus = ", ".join(focus_parts) if focus_parts else "practical fit for your use case"
-    if parsed.get("min_price") is not None and parsed.get("max_price") is not None:
-        price = f"price range {_format_money(parsed.get('min_price'))}-{_format_money(parsed.get('max_price'))}"
-    elif parsed.get("budget") is not None:
-        price = f"budget up to {_format_money(parsed.get('budget'))}"
-    elif parsed.get("target_price") is not None:
-        price = f"target around {_format_money(parsed.get('target_price'))}"
-    else:
-        price = "no strict budget"
-    return f"{focus}; {price}"
+    return focus
 
 
 def _parse_request(text: str) -> dict[str, Any]:
@@ -1085,7 +1064,7 @@ def _collect_listing_highlights(product: dict, language: str) -> list[str]:
         else:
             raw_parts.append(str(value))
 
-    text = " ".join(raw_parts)
+    text = _clean_listing_text(" ".join(raw_parts), max_len=2200)
     if not text.strip():
         return []
 
@@ -1093,7 +1072,7 @@ def _collect_listing_highlights(product: dict, language: str) -> list[str]:
     out: list[str] = []
     seen: set[str] = set()
     for chunk in chunks:
-        cleaned = re.sub(r"\s+", " ", str(chunk or "")).strip(" -.,;:")
+        cleaned = _clean_listing_text(chunk, max_len=140)
         if len(cleaned) < 12:
             continue
         if re.fullmatch(r"[\d\W]+", cleaned):
@@ -1158,7 +1137,6 @@ def _score_explanation_bullets(
     is_top_pick: bool = False,
 ) -> list[str]:
     bullets: list[str] = []
-    price = product.get("price")
     evidence_signals = evidence_signals or []
     highlights = _collect_listing_highlights(product, language)
 
@@ -1206,40 +1184,6 @@ def _score_explanation_bullets(
             else:
                 bullets.append(f"Listed rating: {rating:.1f}/5.")
 
-    if price is not None and min_price is not None and max_price is not None:
-        if min_price <= price <= max_price:
-            if language == "ru":
-                bullets.append(f"По цене всё точно в диапазоне: {_format_money(float(price))} (ваш коридор {_format_money(float(min_price))}-{_format_money(float(max_price))}).")
-            else:
-                bullets.append(f"Price is right inside your range: {_format_money(float(price))} (target {_format_money(float(min_price))}-{_format_money(float(max_price))}).")
-        elif price < min_price:
-            if language == "ru":
-                bullets.append(f"Приятный бонус по цене: {_format_money(float(price))}, это ниже вашего диапазона {_format_money(float(min_price))}-{_format_money(float(max_price))}.")
-            else:
-                bullets.append(f"Nice pricing upside: {_format_money(float(price))}, which is below your requested range {_format_money(float(min_price))}-{_format_money(float(max_price))}.")
-        else:
-            if language == "ru":
-                bullets.append(f"Это более премиальный сценарий: {_format_money(float(price))}, выше вашего диапазона {_format_money(float(min_price))}-{_format_money(float(max_price))}.")
-            else:
-                bullets.append(f"This is a more premium pricing option at {_format_money(float(price))}, above your {_format_money(float(min_price))}-{_format_money(float(max_price))} range.")
-    elif budget is not None and price is not None and price <= budget:
-        delta = float(budget) - float(price)
-        if language == "ru":
-            if delta >= max(5.0, float(budget) * 0.1):
-                bullets.append(f"Сильный плюс по бюджету: цена ниже лимита на {_format_money(delta)}.")
-            else:
-                bullets.append(f"Комфортно укладывается в ваш бюджет ({_format_money(float(budget))}).")
-        else:
-            if delta >= max(5.0, float(budget) * 0.1):
-                bullets.append(f"Budget upside: this comes in {_format_money(delta)} below your cap.")
-            else:
-                bullets.append(f"Comfortably within your budget ({_format_money(float(budget))}).")
-    elif budget is not None and price is not None and price > budget:
-        if language == "ru":
-            bullets.append(f"Цена выше вашего лимита на {_format_money(float(price - budget))}, это вариант класса повыше.")
-        else:
-            bullets.append(f"Over budget by {_format_money(float(price - budget))}; positioned as a higher-tier option.")
-
     if not highlights and marketing_only:
         if language == "ru":
             bullets.append("Описание в карточке краткое, поэтому лучше открыть товар и быстро проверить детали перед оплатой.")
@@ -1251,13 +1195,12 @@ def _score_explanation_bullets(
         else:
             bullets.append(f"Backed by concrete listing signals: {', '.join(evidence_signals[:3])}.")
 
-    if price is None:
-        if language == "ru":
-            bullets.append("Цена в карточке не указана, поэтому финальную стоимость лучше уточнить на странице товара.")
-        else:
-            bullets.append("Price is missing in the listing, so confirm the final amount on the product page.")
+    if language == "ru":
+        bullets.append("По совокупности характеристик это выглядит как сбалансированный и практичный выбор.")
+    else:
+        bullets.append("Overall value: it looks like a balanced and practical choice in this category.")
 
-    return [b for b in bullets if str(b).strip()][:5]
+    return _enforce_single_price_mention([b for b in bullets if str(b).strip()][:5])
 
 
 def _tco_block(product: dict) -> dict[str, Any]:
