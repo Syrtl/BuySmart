@@ -31,6 +31,11 @@
   box-sizing: border-box;
 }
 
+html {
+  width: 570px;
+  min-height: 320px;
+}
+
 body {
   width: 570px;
   min-height: 320px;
@@ -218,7 +223,6 @@ button.secondary:hover {
   margin-top: 8px;
   margin-bottom: 0;
 }
-
 .clear-link {
   font-size: 12px;
   color: var(--text-muted);
@@ -663,10 +667,6 @@ button.secondary:hover {
 }
 
 @media (max-width: 560px) {
-  body {
-    width: 100vw;
-  }
-
   .product-card-main {
     flex-direction: column;
     align-items: stretch;
