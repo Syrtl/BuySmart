@@ -112,7 +112,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         lastAssistantMode: assistantMode,
         followUpQuestion: data ? data.follow_up_question || null : null,
         parsedRequest: data ? data.parsed_request || null : null,
-        intent: data ? data.intent || null : null,
         statusMessage,
         statusType,
         error: (!res.ok) ? { code: 'HTTP_ERROR', message: statusMessage } : (data && data.error ? data.error : null),

@@ -268,21 +268,6 @@ button.secondary:hover {
   line-height: 1.35;
 }
 
-.quality-badge {
-  display: inline-flex;
-  align-items: center;
-  margin-left: 8px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: #e8eefc;
-  color: #1d3e9b;
-  border: 1px solid #d4e0f8;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  vertical-align: middle;
-}
-
 .results li .title a {
   color: var(--text);
   text-decoration: none;
@@ -444,8 +429,7 @@ button.secondary:hover {
 /* Shared modal shell */
 .price-modal,
 .timing-modal,
-.value-modal,
-.explain-modal {
+.value-modal {
   position: fixed;
   inset: 0;
   z-index: 9999;
@@ -453,15 +437,13 @@ button.secondary:hover {
 
 .price-modal.hidden,
 .timing-modal.hidden,
-.value-modal.hidden,
-.explain-modal.hidden {
+.value-modal.hidden {
   display: none;
 }
 
 .price-modal-backdrop,
 .timing-modal-backdrop,
-.value-modal-backdrop,
-.explain-modal-backdrop {
+.value-modal-backdrop {
   position: absolute;
   inset: 0;
   background: rgba(15, 23, 42, 0.48);
@@ -470,8 +452,7 @@ button.secondary:hover {
 
 .price-modal-panel,
 .timing-modal-panel,
-.value-modal-panel,
-.explain-modal-panel {
+.value-modal-panel {
   position: absolute;
   top: 50%;
   left: 50%;
@@ -488,8 +469,7 @@ button.secondary:hover {
 
 .price-modal-header,
 .timing-modal-header,
-.value-modal-header,
-.explain-modal-header {
+.value-modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -499,8 +479,7 @@ button.secondary:hover {
 
 .price-modal-header h2,
 .timing-modal-header h2,
-.value-modal-header h2,
-.explain-modal-header h2 {
+.value-modal-header h2 {
   margin: 0;
   font-size: 15px;
   font-weight: 700;
@@ -528,8 +507,7 @@ button.secondary:hover {
 
 .price-modal-product,
 .timing-modal-product,
-.value-modal-product,
-.explain-modal-product {
+.value-modal-product {
   margin: 0 0 8px;
   font-size: 12px;
   color: var(--text-muted);
@@ -537,8 +515,7 @@ button.secondary:hover {
 
 .price-modal-status,
 .timing-modal-status,
-.value-modal-status,
-.explain-modal-status {
+.value-modal-status {
   margin: 0 0 8px;
   font-size: 12px;
   color: var(--text-muted);
@@ -546,15 +523,13 @@ button.secondary:hover {
 
 .price-modal-status.error,
 .timing-modal-status.error,
-.value-modal-status.error,
-.explain-modal-status.error {
+.value-modal-status.error {
   color: #b91c1c;
 }
 
 .price-modal-status.loading,
 .timing-modal-status.loading,
-.value-modal-status.loading,
-.explain-modal-status.loading {
+.value-modal-status.loading {
   color: #1d4ed8;
 }
 
@@ -568,11 +543,7 @@ button.secondary:hover {
 .value-modal-status.hidden,
 .value-modal-product.hidden,
 .value-modal-body.hidden,
-.value-modal-chart-wrap.hidden,
-.explain-modal-status.hidden,
-.explain-modal-product.hidden,
-.explain-modal-summary.hidden,
-.explain-modal-body.hidden {
+.value-modal-chart-wrap.hidden {
   display: none;
 }
 
@@ -693,72 +664,6 @@ button.secondary:hover {
 
 .value-modal-stat {
   margin: 6px 0;
-}
-
-.explain-modal-summary {
-  margin: 0 0 10px;
-  font-size: 12px;
-  color: #334155;
-  background: #f8fbff;
-  border: 1px solid #dbe7fb;
-  border-radius: 10px;
-  padding: 8px 10px;
-}
-
-.explain-modal-body {
-  margin-top: 8px;
-}
-
-.explain-modal-block {
-  margin-bottom: 10px;
-}
-
-.explain-modal-block h3 {
-  margin: 0 0 6px;
-  font-size: 12px;
-  color: var(--primary);
-}
-
-.explain-modal-block p {
-  margin: 0;
-  font-size: 12px;
-  color: #334155;
-  line-height: 1.45;
-}
-
-.explain-table-wrap {
-  overflow: auto;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  background: #fff;
-}
-
-.explain-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 11px;
-}
-
-.explain-table th,
-.explain-table td {
-  padding: 7px 8px;
-  border-bottom: 1px solid #edf1f7;
-  text-align: left;
-  white-space: nowrap;
-}
-
-.explain-table th {
-  color: #52607a;
-  background: #f8fafd;
-  font-weight: 700;
-}
-
-.explain-table tr:last-child td {
-  border-bottom: none;
-}
-
-.explain-table tr.is-selected td {
-  background: #eef4ff;
 }
 
 @media (max-width: 560px) {

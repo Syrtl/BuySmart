@@ -10,9 +10,6 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.services.quality_score import compute_market_qm as shared_compute_market_qm
-from backend.services.quality_score import compute_quality_y as shared_compute_quality_y
-
 _ALPHA_INTRINSIC = 0.65
 _ALPHA_MARKET = 1.0 - _ALPHA_INTRINSIC
 
@@ -362,17 +359,35 @@ def _normalize_points(raw_items: list[dict[str, Any]]) -> list[ValueChartPoint]:
     for item in prepared:
         rating = item.get("rating")
         review_count = int(item.get("review_count") or 0)
+
+        if rating is None:
+            rn = 0.5
+        else:
+            rn = _clamp01(float(rating) / 5.0)
+
         max_review_count = int(max_reviews_by_category.get(item["category"], 0))
-        market_qm, qm_components = shared_compute_market_qm(
-            rating_avg=rating,
-            review_count=review_count,
-            max_review_count_in_category=max_review_count,
-            defect_rate=item.get("defect_rate"),
-            positive_share=item.get("positive_share"),
-        )
+        if max_review_count > 0:
+            nn = math.log1p(review_count) / math.log1p(max_review_count)
+            nn = _clamp01(nn)
+        else:
+            nn = 0.0
+
+        defect = item.get("defect_rate")
+        if defect is None:
+            defect = 0.1
+        defect = _clamp01(float(defect))
+
+        s = _clamp01(float(item.get("positive_share") if item.get("positive_share") is not None else 0.5))
+
+        market_qm = (0.40 * rn) + (0.25 * nn) + (0.20 * (1.0 - defect)) + (0.15 * s)
+        market_qm = _clamp01(market_qm)
 
         llm_payload = llm_scores.get(item["id"], {"q0": 0.5, "reasons": [], "signals": {}})
-        quality_y, q0 = shared_compute_quality_y(llm_payload.get("q0"), market_qm, alpha=_ALPHA_INTRINSIC)
+        q0 = _extract_q0_raw(llm_payload.get("q0"))
+        if q0 is None:
+            q0 = 0.5
+
+        quality_y = _clamp01((_ALPHA_INTRINSIC * q0) + (_ALPHA_MARKET * market_qm))
         quality = quality_y * 100.0
         value_score = quality / max(float(item["price"]), 1e-9)
 
@@ -389,10 +404,10 @@ def _normalize_points(raw_items: list[dict[str, Any]]) -> list[ValueChartPoint]:
             signals = {}
 
         breakdown = {
-            "Rn": round(float(qm_components.get("Rn", 0.5)), 5),
-            "Nn": round(float(qm_components.get("Nn", 0.0)), 5),
-            "D": round(float(qm_components.get("D", 0.1)), 5),
-            "S": round(float(qm_components.get("S", 0.5)), 5),
+            "Rn": round(rn, 5),
+            "Nn": round(nn, 5),
+            "D": round(defect, 5),
+            "S": round(s, 5),
             "q0_reasons": reasons,
             "q0_signals": signals,
         }

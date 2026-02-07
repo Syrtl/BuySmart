@@ -1,5 +1,7 @@
 """Shared quality-score helpers used by ranking and charts."""
 
+from __future__ import annotations
+
 import math
 from typing import Any
 

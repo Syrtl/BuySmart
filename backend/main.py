@@ -14,8 +14,7 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from backend.services.recommender import embeddings_enabled, parse_intent, recommend
 from backend.services.explain import build_why
-from backend.services.ranking_engine import parse_intent_payload, rank_products
-from backend.services.assistant_explain import explain_candidates
+from backend.services.llm_recommender import recommend_via_llm, recommend_from_catalog
 from backend.services.price_history import PriceHistoryResponse, get_price_history
 from backend.services.buy_timing import BuyTimingResponse, analyze_buy_timing
 from backend.services.value_chart import ValueChartResponse, build_value_chart
@@ -170,29 +169,6 @@ class AssistantRecommendRequest(BaseModel):
     catalog_override: list[dict[str, Any]] | None = Field(None, description="Page-scanned catalog; when set, recommend only from these items")
 
 
-class IntentParseRequest(BaseModel):
-    user_text: str = Field(..., alias="userText")
-
-
-class ExplainCandidate(BaseModel):
-    id: str
-    title: str
-    price: float | None = None
-    quality_score: float = Field(0.0, alias="qualityScore")
-    price_fit_score: float = Field(0.0, alias="priceFitScore")
-    requirement_match: float = Field(0.0, alias="requirementMatch")
-    material_score: float = Field(0.0, alias="materialScore")
-    total_score: float = Field(0.0, alias="totalScore")
-    flags: list[str] = Field(default_factory=list)
-
-
-class ExplainRequest(BaseModel):
-    user_text: str = Field(..., alias="userText")
-    intent: dict[str, Any] | None = None
-    candidates: list[ExplainCandidate] = Field(default_factory=list)
-    selected_id: str | None = Field(None, alias="selectedId")
-
-
 def _fallback_parsed_request(user_text: str) -> dict[str, Any]:
     intent = parse_intent(user_text)
     return {
@@ -200,17 +176,6 @@ def _fallback_parsed_request(user_text: str) -> dict[str, Any]:
         "category": intent.get("category"),
         "must_haves": [],
         "nice_to_haves": (intent.get("keywords") or [])[:10],
-    }
-
-
-def _intent_to_parsed_request(intent: dict[str, Any], user_text: str) -> dict[str, Any]:
-    requirements = [str(x) for x in (intent.get("requirements") or []) if str(x).strip()]
-    materials = [str(x) for x in (intent.get("materials") or []) if str(x).strip()]
-    return {
-        "budget": intent.get("budget"),
-        "category": intent.get("category"),
-        "must_haves": requirements[:10],
-        "nice_to_haves": materials[:10],
     }
 
 
@@ -332,8 +297,6 @@ def root():
         "health": "/health",
         "recommend": "POST /recommend",
         "assistant": "POST /assistant/recommend",
-        "intent": "POST /api/intent",
-        "explain": "POST /api/explain",
         "price_history": "GET /api/price-history?productId=XXX&weeks=13",
         "buy_timing": "GET /api/buy-timing?productId=XXX",
         "value_chart": "GET /api/value-chart?productId=XXX",
@@ -343,44 +306,6 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "ok"}
-
-
-@app.post("/api/intent")
-def parse_intent_endpoint(req: IntentParseRequest):
-    user_text = str(req.user_text or "").strip()
-    if not user_text:
-        raise HTTPException(status_code=400, detail="Missing required field: userText")
-    intent = parse_intent_payload(user_text)
-    return {
-        "userText": user_text,
-        "intent": intent,
-        "parsed_request": _intent_to_parsed_request(intent, user_text),
-    }
-
-
-@app.post("/api/explain")
-def explain_endpoint(req: ExplainRequest):
-    user_text = str(req.user_text or "").strip()
-    if not user_text:
-        raise HTTPException(status_code=400, detail="Missing required field: userText")
-    if not req.candidates:
-        raise HTTPException(status_code=400, detail="Missing required field: candidates")
-
-    candidates_payload = [item.model_dump(by_alias=True) for item in req.candidates]
-    explanation = explain_candidates(
-        user_text=user_text,
-        intent=req.intent,
-        candidates=candidates_payload,
-        selected_id=req.selected_id,
-    )
-    return {
-        "userText": user_text,
-        "intent": req.intent,
-        "selectedId": explanation.get("selectedId"),
-        "summary": explanation.get("summary"),
-        "items": explanation.get("items") or [],
-        "scoreTable": candidates_payload,
-    }
 
 
 @app.get("/api/price-history", response_model=PriceHistoryResponse)
@@ -517,15 +442,10 @@ def assistant_recommend_endpoint(req: AssistantRecommendRequest):
                     "I couldn't read products from this page. Try scanning a search results page.",
                     using_override=True,
                 )
-            ranking = rank_products(user_text=req.user_text, products=products, k=req.k)
-            return {
-                "parsed_request": _intent_to_parsed_request(ranking.get("intent") or {}, req.user_text),
-                "intent": ranking.get("intent") or {},
-                "recommendations": ranking.get("recommendations") or [],
-                "follow_up_question": None,
-                "assistant_mode": "deterministic",
-                "using_override": True,
-            }
+            result = recommend_from_catalog(req.user_text, products, k=req.k)
+            result["assistant_mode"] = "deterministic"
+            result["using_override"] = True
+            return result
 
         _load_catalogs()
         store = req.store.lower().strip()
@@ -544,15 +464,20 @@ def assistant_recommend_endpoint(req: AssistantRecommendRequest):
                 "Catalog is empty for this store.",
                 using_override=False,
             )
-        ranking = rank_products(user_text=req.user_text, products=products, k=req.k)
-        return {
-            "parsed_request": _intent_to_parsed_request(ranking.get("intent") or {}, req.user_text),
-            "intent": ranking.get("intent") or {},
-            "recommendations": ranking.get("recommendations") or [],
-            "follow_up_question": None,
-            "assistant_mode": "deterministic",
-            "using_override": False,
-        }
+        result = recommend_via_llm(req.user_text, products, k=req.k, catalog_override=False)
+        if result is None:
+            result = recommend_from_catalog(req.user_text, products, k=req.k)
+            result["assistant_mode"] = "deterministic"
+        else:
+            sanitized = _sanitize_assistant_response(result, products, req.k)
+            if sanitized is not None:
+                result = sanitized
+                result["assistant_mode"] = "llm"
+            else:
+                result = recommend_from_catalog(req.user_text, products, k=req.k)
+                result["assistant_mode"] = "deterministic"
+        result["using_override"] = False
+        return result
     except HTTPException:
         raise
     except Exception as exc:

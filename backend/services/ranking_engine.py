@@ -1,5 +1,7 @@
 """Deterministic ranking engine for assistant recommendations."""
 
+from __future__ import annotations
+
 import re
 from typing import Any
 
@@ -19,12 +21,6 @@ _MATERIAL_KEYWORDS = {
     "cotton", "linen", "wool", "polyester", "nylon", "leather", "suede",
     "glass", "ceramic", "porcelain",
     "сталь", "алюминий", "дерево", "дуб", "бамбук", "пластик", "силикон", "резина", "хлопок", "лен", "шерсть", "кожа", "стекло", "керамика",
-}
-
-_PRODUCT_FOCUS_TERMS = {
-    "chair", "desk", "lamp", "watch", "tv", "phone", "smartphone", "headphone", "headphones", "earbuds",
-    "underwear", "sofa", "table", "keyboard", "monitor", "laptop", "tablet",
-    "стул", "кресло", "лампа", "часы", "телефон", "наушники", "белье",
 }
 
 
@@ -84,7 +80,6 @@ def parse_intent_payload(user_text: str) -> dict[str, Any]:
         "target_price": None,
         "requirements": [],
         "materials": [],
-        "focus_term": None,
     }
 
     m_range = re.search(
@@ -126,22 +121,12 @@ def parse_intent_payload(user_text: str) -> dict[str, Any]:
             intent["max_price"] = value * 1.2
             intent["budget"] = intent["max_price"]
 
-    if intent["target_price"] is None:
-        explicit = re.findall(r"(?:\$|usd|dollars?)\s*(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s*(?:usd|dollars?)", lower, re.IGNORECASE)
-        values = [g[0] or g[1] for g in explicit if (g[0] or g[1])]
-        if values:
-            intent["target_price"] = float(values[-1])
-
     req_tokens = _tokenize(lower)
     materials = [t for t in req_tokens if t in _MATERIAL_KEYWORDS]
     req_clean = [t for t in req_tokens if t not in _MATERIAL_KEYWORDS]
 
     intent["materials"] = list(dict.fromkeys(materials))[:8]
     intent["requirements"] = list(dict.fromkeys(req_clean))[:24]
-    for token in intent["requirements"]:
-        if token in _PRODUCT_FOCUS_TERMS:
-            intent["focus_term"] = token
-            break
     return intent
 
 
@@ -290,38 +275,9 @@ def rank_products(
     intent: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     parsed_intent = intent if isinstance(intent, dict) else parse_intent_payload(user_text)
-    parsed_intent = dict(parsed_intent)
-    candidates = [item for item in products if isinstance(item, dict)]
-
-    focus_term = str(parsed_intent.get("focus_term") or "").strip().lower()
-    requirements = [str(x).strip().lower() for x in (parsed_intent.get("requirements") or []) if str(x).strip()]
-
-    if focus_term:
-        focused = [item for item in candidates if focus_term in _text_blob(item)]
-        if focused:
-            candidates = focused
-
-    if not focus_term and len(requirements) == 1:
-        strict_kw = requirements[0]
-        strict_matches = [item for item in candidates if strict_kw in _text_blob(item)]
-        if strict_matches:
-            candidates = strict_matches
-
-    min_price = parsed_intent.get("min_price")
-    max_price = parsed_intent.get("max_price")
-    if max_price is not None:
-        under = [item for item in candidates if (_safe_price(item.get("price")) is not None and _safe_price(item.get("price")) <= float(max_price))]
-        if under:
-            candidates = under
-    if min_price is not None:
-        above = [item for item in candidates if (_safe_price(item.get("price")) is not None and _safe_price(item.get("price")) >= float(min_price))]
-        if above:
-            candidates = above
-    if not candidates:
-        candidates = [item for item in products if isinstance(item, dict)]
 
     category_reviews_max: dict[str, int] = {}
-    for item in candidates:
+    for item in products:
         category = str(item.get("category") or "unknown").strip().lower() or "unknown"
         rv = _safe_int(item.get("reviewCount"))
         if rv is None:
@@ -330,7 +286,7 @@ def rank_products(
         category_reviews_max[category] = max(category_reviews_max.get(category, 0), rv)
 
     scored_rows: list[dict[str, Any]] = []
-    for product in candidates:
+    for product in products:
         if not isinstance(product, dict):
             continue
         product_id = str(product.get("id") or "").strip()

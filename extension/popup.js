@@ -33,12 +33,9 @@ let lastResultUrlByTitle = {};
 let lastRenderedStore = '';
 let lastRenderedScanOrigin = '';
 let lastRenderedCards = [];
-let lastExplainCandidates = [];
-let lastParsedIntent = null;
 let priceHistoryModal = null;
 let timingModal = null;
 let valueChartModal = null;
-let explainModal = null;
 
 function getApiBase() {
   const fromInput = (apiBaseEl && apiBaseEl.value && apiBaseEl.value.trim()) || '';
@@ -216,7 +213,6 @@ function renderResults(items, urlMap, urlTitleMap, store, scanOrigin) {
   lastResultUrlById = {};
   lastResultUrlByTitle = {};
   lastRenderedCards = [];
-  lastExplainCandidates = [];
   lastRenderedStore = String(store || '').toLowerCase();
   lastRenderedScanOrigin = String(scanOrigin || '');
   if (!items || items.length === 0) {
@@ -282,17 +278,6 @@ function renderResults(items, urlMap, urlTitleMap, store, scanOrigin) {
       titleContainer.textContent = titleText;
     }
 
-    const explainCandidate = normalizeExplainCandidate(item);
-    if (explainCandidate.id || explainCandidate.title) {
-      lastExplainCandidates.push(explainCandidate);
-    }
-    if (explainCandidate.qualityScore > 0) {
-      const qualityBadge = document.createElement('span');
-      qualityBadge.className = 'quality-badge';
-      qualityBadge.textContent = 'Quality: ' + Math.round(explainCandidate.qualityScore) + '/100';
-      titleContainer.appendChild(qualityBadge);
-    }
-
     const meta = document.createElement('div');
     meta.className = 'meta';
     const priceStr = maybePrice != null ? ('$' + Number(maybePrice).toFixed(2)) : '—';
@@ -355,28 +340,69 @@ function renderResults(items, urlMap, urlTitleMap, store, scanOrigin) {
     const explainBtn = document.createElement('button');
     explainBtn.type = 'button';
     explainBtn.className = 'action-btn secondary';
-    explainBtn.textContent = 'Explain';
+    explainBtn.textContent = '⏳ Timing';
     if (!id) {
       explainBtn.disabled = true;
       explainBtn.classList.add('disabled');
     } else {
       explainBtn.addEventListener('click', function () {
-        if (!explainModal) {
-          showStatus('Explain modal is unavailable.', 'error');
+        if (!timingModal) {
+          showStatus('Timing modal is unavailable.', 'error');
           return;
         }
-        var title = String(item.title || '');
-        var candidates = lastExplainCandidates.slice(0, 5);
-        explainModal.open({
+        var meta = lastResultMetaById[id] || {};
+        timingModal.open({
           productId: id,
-          title: title,
-          userText: (queryEl && queryEl.value) ? String(queryEl.value).trim() : '',
-          intent: lastParsedIntent,
-          candidates: candidates
+          currentPrice: maybePrice,
+          title: String(meta.title || item.title || ''),
+          category: String(meta.category || item.category || '')
         });
       });
     }
     actions.appendChild(explainBtn);
+
+    const valueBtn = document.createElement('button');
+    valueBtn.type = 'button';
+    valueBtn.className = 'action-btn secondary';
+    valueBtn.textContent = '📊 Value';
+    if (!id) {
+      valueBtn.disabled = true;
+      valueBtn.classList.add('disabled');
+    } else {
+      valueBtn.addEventListener('click', function () {
+        if (!valueChartModal) {
+          showStatus('Value chart modal is unavailable.', 'error');
+          return;
+        }
+        var meta = lastResultMetaById[id] || {};
+        valueChartModal.open({
+          productId: id,
+          currentPrice: maybePrice,
+          title: String(meta.title || item.title || ''),
+          category: String(meta.category || item.category || ''),
+          rating: meta.rating,
+          reviewCount: meta.reviewCount,
+          store: store,
+          scanOrigin: scanOrigin,
+          localComparables: buildValueChartComparables(
+            id,
+            String(meta.title || item.title || ''),
+            maybePrice,
+            String(meta.category || item.category || ''),
+            meta.rating,
+            meta.reviewCount
+          )
+        });
+      });
+    }
+    actions.appendChild(valueBtn);
+
+    const placeholderBtn = document.createElement('button');
+    placeholderBtn.type = 'button';
+    placeholderBtn.className = 'action-btn secondary disabled';
+    placeholderBtn.disabled = true;
+    placeholderBtn.textContent = 'Explain';
+    actions.appendChild(placeholderBtn);
 
     main.appendChild(info);
     main.appendChild(actions);
@@ -425,54 +451,6 @@ function parseNumericPrice(value) {
   return isFinite(n) ? n : null;
 }
 
-function normalizeExplainCandidate(item) {
-  item = item || {};
-  var breakdown = (item.breakdown && typeof item.breakdown === 'object') ? item.breakdown : {};
-
-  var qualityScore = parseNumericPrice(item.qualityScore);
-  if (qualityScore == null) qualityScore = parseNumericPrice(breakdown.qualityScore);
-  if (qualityScore == null) qualityScore = 0;
-
-  var priceFitScore = parseNumericPrice(item.priceFitScore);
-  if (priceFitScore == null) priceFitScore = parseNumericPrice(breakdown.priceFitScore);
-  if (priceFitScore == null) priceFitScore = 0;
-
-  var requirementMatch = parseNumericPrice(item.requirementMatch);
-  if (requirementMatch == null) requirementMatch = parseNumericPrice(breakdown.requirementMatch);
-  if (requirementMatch == null) requirementMatch = 0;
-
-  var materialScore = parseNumericPrice(item.materialScore);
-  if (materialScore == null) materialScore = parseNumericPrice(breakdown.materialScore);
-  if (materialScore == null) materialScore = 0;
-
-  var totalScore = parseNumericPrice(item.totalScore);
-  if (totalScore == null) totalScore = parseNumericPrice(breakdown.totalScore);
-  if (totalScore == null) {
-    totalScore = (0.45 * qualityScore) + (0.35 * priceFitScore) + (0.15 * requirementMatch) + (0.05 * materialScore);
-  }
-
-  var flags = [];
-  var rawFlags = item.flags || breakdown.flags;
-  if (Array.isArray(rawFlags)) {
-    rawFlags.forEach(function (f) {
-      var sf = String(f || '').trim();
-      if (sf) flags.push(sf);
-    });
-  }
-
-  return {
-    id: String(item.id || '').trim(),
-    title: String(item.title || '').trim(),
-    price: parseNumericPrice(item.price),
-    qualityScore: Number(qualityScore),
-    priceFitScore: Number(priceFitScore),
-    requirementMatch: Number(requirementMatch),
-    materialScore: Number(materialScore),
-    totalScore: Number(totalScore),
-    flags: flags
-  };
-}
-
 function mergeTitleAndSubtitle(title, subtitle) {
   var t = (title || '').trim();
   var s = (subtitle || '').trim();
@@ -498,13 +476,6 @@ function applySessionState(session, opts) {
   lastHttpStatus = (session.lastHttpStatus != null) ? session.lastHttpStatus : null;
   lastOverrideUsed = (typeof session.lastOverrideUsed === 'boolean') ? !!session.lastOverrideUsed : null;
   lastAssistantMode = session.lastAssistantMode ? String(session.lastAssistantMode) : null;
-  if (session.intent && typeof session.intent === 'object') {
-    lastParsedIntent = session.intent;
-  } else if (session.parsedRequest && typeof session.parsedRequest === 'object') {
-    lastParsedIntent = session.parsedRequest;
-  } else {
-    lastParsedIntent = null;
-  }
   if (session.scanOrigin) {
     lastScanOrigin = String(session.scanOrigin || '');
   } else if (!lastScanOrigin) {
@@ -828,15 +799,6 @@ document.addEventListener('DOMContentLoaded', async function () {
       getApiBase: getApiBase,
       fetchWithTimeout: fetchWithTimeout,
       resolveProductUrl: resolveValuePointUrl,
-      onError: function (message) {
-        if (message) showStatus(String(message), 'error');
-      }
-    });
-  }
-  if (window.ExplainModal) {
-    explainModal = new window.ExplainModal({
-      getApiBase: getApiBase,
-      fetchWithTimeout: fetchWithTimeout,
       onError: function (message) {
         if (message) showStatus(String(message), 'error');
       }
