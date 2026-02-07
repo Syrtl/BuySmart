@@ -90,6 +90,34 @@
     return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
   }
 
+  function dedupeCommaSegments(text) {
+    var raw = String(text || '');
+    if (raw.indexOf(',') < 0) return raw;
+    var parts = raw.split(',').map(function (p) { return String(p || '').trim(); }).filter(Boolean);
+    if (parts.length <= 1) return raw;
+    var out = [];
+    var seen = {};
+    parts.forEach(function (part) {
+      var key = part.toLowerCase().replace(/\s+/g, ' ').trim();
+      if (!key || seen[key]) return;
+      seen[key] = true;
+      out.push(part);
+    });
+    return out.join(', ');
+  }
+
+  function cleanTooltipTitle(value) {
+    var text = String(value || '').replace(/\u00a0/g, ' ');
+    if (!text) return 'Item';
+    text = text.replace(/(\$\s*\d+(?:,\d{3})*(?:\.\d{1,2})?)(?:\s*\1)+/gi, '$1');
+    text = text.replace(/\$\s*\d+(?:,\d{3})*(?:\.\d{1,2})?/g, ' ');
+    text = text.replace(/\b(?:price|product\s*page|list\s*price|list|typical|sponsored)\b:?/gi, ' ');
+    text = text.replace(/\s+/g, ' ').trim();
+    text = dedupeCommaSegments(text);
+    text = text.replace(/\s+/g, ' ').replace(/^[,;:|.\-\s]+|[,;:|.\-\s]+$/g, '');
+    return text || 'Item';
+  }
+
   function normalizeLocalPoints(rawPoints) {
     var points = (rawPoints || []).map(function (item, idx) {
       var id = String(item.id || ('local-' + idx));
@@ -829,12 +857,13 @@
     this.chartWrapEl.style.cursor = nearest.url ? 'pointer' : 'default';
 
     var point = nearest.point || {};
+    var cleanTitle = cleanTooltipTitle(point.title || point.id || 'Item');
     var flags = [];
     if (String(point.id || '') === this.chartState.currentId) flags.push('Current');
     if (String(point.id || '') === this.chartState.optimalId) flags.push('Best Value');
 
     this.tooltipEl.innerHTML = [
-      '<strong>' + escapeHtml(String(point.title || point.id || 'Item')) + '</strong>',
+      '<strong>' + escapeHtml(cleanTitle) + '</strong>',
       flags.length ? ('<br>' + escapeHtml(flags.join(' | '))) : '',
       '<br>',
       'Price: ' + escapeHtml(formatMoney(point.price, this.chartState.currency)),
