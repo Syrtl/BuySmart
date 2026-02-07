@@ -369,14 +369,18 @@ def rank_products(
     recommendations: list[dict[str, Any]] = []
     for row in top_rows:
         breakdown = dict(row["breakdown"])
+        price_val = row["price"]
+        title_val = row["title"]
         score_lines = [
-            f"Quality score: {breakdown['qualityScore']}/100.",
-            f"Price fit: {breakdown['priceFitScore']}/100.",
-            f"Requirement match: {breakdown['requirementMatch']}/100.",
-            f"Material score: {breakdown['materialScore']}/100.",
+            f"Consultant verdict: {title_val} is one of the strongest overall value picks in this set.",
+            f"It combines reliable quality with a practical price point for day-to-day use.",
         ]
+        if price_val is not None:
+            score_lines.append(f"Current price: ${float(price_val):.2f}.")
         if "over_budget" in breakdown.get("flags", []):
-            score_lines.append("Above your budget target.")
+            score_lines.append("This option sits above your target budget, positioned as a more premium pick.")
+        else:
+            score_lines.append("Pricing stays aligned with your budget direction.")
 
         recommendations.append(
             {

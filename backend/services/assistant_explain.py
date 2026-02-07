@@ -63,17 +63,16 @@ def _fallback_explanation(
         }
 
     over_budget = "over_budget" in (selected.get("flags") or [])
-    price_note = "above budget" if over_budget else "within or near budget"
+    price_note = "above budget" if over_budget else "within budget direction"
     summary = (
-        f"{selected.get('title')} ranks highest because it balances quality "
-        f"({selected.get('qualityScore')}/100), price fit ({selected.get('priceFitScore')}/100), "
-        f"and requirement coverage ({selected.get('requirementMatch')}/100)."
+        f"{selected.get('title')} is the strongest all-around pick for this request: "
+        f"balanced quality, practical pricing, and a strong fit for the intended use."
     )
 
     explanation = (
-        f"Professional recommendation: this option has a quality score of {selected.get('qualityScore')}/100, "
-        f"price fit of {selected.get('priceFitScore')}/100 ({price_note}), and requirement match of "
-        f"{selected.get('requirementMatch')}/100. Material score is {selected.get('materialScore')}/100."
+        f"Consultant recommendation: this model is a confident choice for your scenario. "
+        f"It keeps a strong quality baseline, stays {price_note}, and remains relevant to your core needs. "
+        f"If you want the safest value profile from this shortlist, this is the option to open first."
     )
 
     return {
@@ -138,10 +137,11 @@ def explain_candidates(
         )
 
     system_prompt = (
-        "You are a professional procurement consultant. "
+        "You are a professional procurement consultant and sales advisor. "
         "Explain ONLY the provided candidates. NEVER invent items or metrics. "
-        "Every explanation must explicitly reference qualityScore, priceFitScore, and requirementMatch. "
-        "Be concise and factual. Return JSON only."
+        "Use persuasive but factual language, and do not expose internal ranking mechanics. "
+        "Mention quality, budget fit, and requirement relevance naturally. "
+        "Return JSON only."
     )
 
     payload = {

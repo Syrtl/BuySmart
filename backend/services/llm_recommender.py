@@ -19,7 +19,7 @@ STRICT RULES:
 2) If data is missing for a field, respond with "Unknown from catalog" for that field.
 3) Ask at most one follow-up question (in follow_up_question). Use null if no follow-up needed.
 4) Output ONLY valid JSON in the exact schema below. No markdown, no code fences, no extra text before or after the JSON.
-5) Do not use marketing language or free-form fluff. Be factual and brief.
+5) Use professional consultant language: concise, persuasive, and factual. Do not reveal internal scoring logic.
 6) For each recommendation: score_explanation must list only catalog facts (or "Unknown from catalog"). tco.yearly_cost only if lifespan_years exists in catalog (formula: price / lifespan_years). unknowns list missing catalog fields.
 
 REQUIRED JSON SCHEMA (output this and nothing else):
@@ -57,7 +57,8 @@ When using catalog_override:
 - Use ONLY the provided catalog items.
 - Rank by best fit to the user prompt using title + description/snippet + category + budget/price.
 - Do not pick only by brand name when other prompt constraints exist.
-- For each recommendation, explain WHY it matches the prompt (keywords/features/budget fit) using catalog facts only.
+- For each recommendation, explain value like a consultant/marketer, using catalog facts only.
+- Never mention keyword-match counts, scoring formulas, or internal ranking steps.
 - If price is missing for an item, say "Unknown from catalog" for that field.
 - Return JSON only."""
 
@@ -799,6 +800,70 @@ def _keyword_match_score(product: dict, keyword_weights: dict[str, float]) -> fl
     return score
 
 
+def _collect_listing_highlights(product: dict, language: str) -> list[str]:
+    raw_parts: list[str] = []
+    for key in ("description", "snippet", "specs"):
+        value = product.get(key)
+        if value is None:
+            continue
+        if isinstance(value, str):
+            raw_parts.append(value)
+        elif isinstance(value, list):
+            raw_parts.extend([str(v) for v in value if str(v).strip()])
+        elif isinstance(value, dict):
+            raw_parts.extend([str(v) for v in value.values() if str(v).strip()])
+        else:
+            raw_parts.append(str(value))
+
+    text = " ".join(raw_parts)
+    if not text.strip():
+        return []
+
+    chunks = re.split(r"[•\n\r;|]+|(?<=[.!?])\s+", text)
+    out: list[str] = []
+    seen: set[str] = set()
+    for chunk in chunks:
+        cleaned = re.sub(r"\s+", " ", str(chunk or "")).strip(" -.,;:")
+        if len(cleaned) < 12:
+            continue
+        if re.fullmatch(r"[\d\W]+", cleaned):
+            continue
+        key = cleaned.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(cleaned)
+        if len(out) >= 3:
+            break
+    return out
+
+
+def _category_value_line(product: dict, language: str) -> str:
+    category = str(product.get("category") or "").strip().lower()
+    if language == "ru":
+        mapping = {
+            "electronics": "По категории это практичный вариант с хорошим балансом возможностей на каждый день.",
+            "furniture": "По категории это акцент на комфорт, удобство в ежедневном использовании и внятную эргономику.",
+            "audio": "По категории это уверенный вариант для повседневного прослушивания и стабильного комфорта.",
+            "tools": "По категории это рабочий инструмент с фокусом на надежность и ресурс.",
+            "appliances": "По категории это бытовое решение с упором на стабильную и предсказуемую работу.",
+            "lighting": "По категории это разумный выбор по практичности и удобству использования.",
+            "safety": "По категории это выбор в пользу надежности и уверенной базовой защиты.",
+        }
+        return mapping.get(category, "Это сбалансированный вариант для повседневных задач с упором на практичность.")
+
+    mapping = {
+        "electronics": "In this category, it offers a strong day-to-day balance of features and practical performance.",
+        "furniture": "In this category, it emphasizes comfort, everyday ergonomics, and long-session usability.",
+        "audio": "In this category, it is a reliable pick for daily listening comfort and consistent performance.",
+        "tools": "In this category, it leans toward dependable build quality and steady work performance.",
+        "appliances": "In this category, it is positioned as a stable, practical everyday choice.",
+        "lighting": "In this category, it is a practical option for usability and consistency.",
+        "safety": "In this category, it prioritizes reliability and confident baseline protection.",
+    }
+    return mapping.get(category, "It is a balanced, practical option for everyday use.")
+
+
 def _score_explanation_bullets(
     product: dict,
     budget: float | None = None,
@@ -822,133 +887,107 @@ def _score_explanation_bullets(
     total_candidates: int = 0,
     is_top_pick: bool = False,
 ) -> list[str]:
-    bullets = []
+    bullets: list[str] = []
     price = product.get("price")
-    matched_concepts = matched_concepts or []
     evidence_signals = evidence_signals or []
-    concept_labels = _concept_labels(matched_concepts, language)
+    highlights = _collect_listing_highlights(product, language)
 
     if language == "ru":
+        focus = buyer_focus_summary or "ваши задачи"
         if is_top_pick:
-            focus = buyer_focus_summary or "ваш запрос"
-            if total_candidates > 1:
-                compared = f"после сравнения {total_candidates} товаров из скана"
-            elif total_candidates == 1:
-                compared = "по результатам сравнения найденных товаров"
-            else:
-                compared = "после сравнения товаров из скана"
-            bullets.append(f"Консультантский вывод: это лучший выбор {compared}, потому что он ближе всего к вашему запросу ({focus}).")
+            bullets.append(f"Консультантский выбор: это самый убедительный вариант под ваш запрос ({focus}).")
         else:
-            bullets.append(f"Альтернатива №{rank}: хороший вариант, но по приоритетам уступает позиции выше.")
+            bullets.append(f"Альтернатива №{rank}: достойный вариант, если хотите близкий по уровню продукт.")
 
-        if requested_family_label and family_match_score > 0:
-            bullets.append(f"По типу товара это корректный матч: {requested_family_label}.")
-
-        if total_query_concepts > 0 and matched_concepts:
-            bullets.append(f"Закрывает ключевые потребности по запросу: {', '.join(concept_labels[:3])}.")
-            if is_top_pick and max_concept_match_count > 0 and len(matched_concepts) == max_concept_match_count:
-                bullets.append("По смысловым признакам это один из самых точных матчей в скане.")
+        if highlights:
+            bullets.append(f"Что выделяет модель по карточке товара: {highlights[0]}.")
+            if len(highlights) > 1:
+                bullets.append(f"Дополнительный плюс: {highlights[1]}.")
+        else:
+            bullets.append(_category_value_line(product, language))
     else:
+        focus = buyer_focus_summary or "your needs"
         if is_top_pick:
-            focus = buyer_focus_summary or "your prompt"
-            if total_candidates > 1:
-                compared = f"out of {total_candidates} scanned options"
-            elif total_candidates == 1:
-                compared = "for the only matching scanned option"
-            else:
-                compared = "across scanned options"
-            bullets.append(f"Consultant verdict: this is the best fit {compared} because it aligns most closely with {focus}.")
+            bullets.append(f"Consultant verdict: this is the strongest overall pick for {focus}.")
         else:
-            bullets.append(f"Alternative #{rank}: solid match, but slightly weaker than higher-ranked options.")
+            bullets.append(f"Alternative #{rank}: a strong option if you want a close runner-up.")
 
-        if requested_family_label and family_match_score > 0:
-            bullets.append(f"Correct product type match: {requested_family_label}.")
-
-        if total_query_concepts > 0 and matched_concepts:
-            bullets.append(f"Covers your key needs: {', '.join(concept_labels[:3])}.")
-            if is_top_pick and max_concept_match_count > 0 and len(matched_concepts) == max_concept_match_count:
-                bullets.append("Among scanned items, it has one of the strongest feature-level matches.")
-
-    if evidence_signals:
-        if language == "ru":
-            bullets.append(f"Опираюсь на конкретные признаки из карточки, а не на рекламный слоган: {', '.join(evidence_signals[:4])}.")
+        if highlights:
+            bullets.append(f"What stands out from the listing: {highlights[0]}.")
+            if len(highlights) > 1:
+                bullets.append(f"Additional upside: {highlights[1]}.")
         else:
-            bullets.append(f"Uses concrete listing evidence (not marketing wording): {', '.join(evidence_signals[:4])}.")
-    elif spec_count > 0:
-        if language == "ru":
-            bullets.append(f"В карточке есть конкретные характеристики ({spec_count}), поэтому выбор основан на фактах.")
-        else:
-            bullets.append(f"The listing includes concrete specs ({spec_count}), so this choice is evidence-based.")
-    elif marketing_only:
-        if language == "ru":
-            bullets.append("В описании много маркетинговых формулировок и мало проверяемых характеристик.")
-        else:
-            bullets.append("The listing has marketing-heavy wording and limited verifiable details.")
+            bullets.append(_category_value_line(product, language))
 
     if rating is not None:
         if reviews_count is not None and reviews_count > 0:
             if language == "ru":
-                bullets.append(f"Рейтинг в карточке: {rating:.1f}/5 на основе {reviews_count} отзывов.")
+                bullets.append(f"По доверию покупателей: рейтинг {rating:.1f}/5 на базе {reviews_count} отзывов.")
             else:
-                bullets.append(f"Listing rating: {rating:.1f}/5 based on {reviews_count} reviews.")
+                bullets.append(f"Customer signal: {rating:.1f}/5 based on {reviews_count} reviews.")
             if reviews_count < 30:
                 if language == "ru":
-                    bullets.append("Отзывов пока мало, поэтому оценка менее надежна.")
+                    bullets.append("Отзывов пока немного, поэтому финально стоит проверить карточку перед покупкой.")
                 else:
-                    bullets.append("Review sample is still small, so rating confidence is limited.")
+                    bullets.append("Review volume is still modest, so it is worth a quick final check before purchase.")
         else:
             if language == "ru":
-                bullets.append(f"Рейтинг в карточке: {rating:.1f}/5.")
+                bullets.append(f"По карточке товара рейтинг: {rating:.1f}/5.")
             else:
-                bullets.append(f"Listing rating: {rating:.1f}/5.")
+                bullets.append(f"Listed rating: {rating:.1f}/5.")
 
     if price is not None and min_price is not None and max_price is not None:
         if min_price <= price <= max_price:
             if language == "ru":
-                bullets.append(f"Цена ${float(price):.2f} находится в вашем диапазоне ${float(min_price):.2f}-${float(max_price):.2f}.")
+                bullets.append(f"По цене всё точно в диапазоне: {_format_money(float(price))} (ваш коридор {_format_money(float(min_price))}-{_format_money(float(max_price))}).")
             else:
-                bullets.append(f"Price ${float(price):.2f} is inside your requested range ${float(min_price):.2f}-${float(max_price):.2f}.")
+                bullets.append(f"Price is right inside your range: {_format_money(float(price))} (target {_format_money(float(min_price))}-{_format_money(float(max_price))}).")
         elif price < min_price:
             if language == "ru":
-                bullets.append(f"Цена ${float(price):.2f} ниже вашего диапазона ${float(min_price):.2f}-${float(max_price):.2f}.")
+                bullets.append(f"Приятный бонус по цене: {_format_money(float(price))}, это ниже вашего диапазона {_format_money(float(min_price))}-{_format_money(float(max_price))}.")
             else:
-                bullets.append(f"Price ${float(price):.2f} is below your requested range ${float(min_price):.2f}-${float(max_price):.2f}.")
+                bullets.append(f"Nice pricing upside: {_format_money(float(price))}, which is below your requested range {_format_money(float(min_price))}-{_format_money(float(max_price))}.")
         else:
             if language == "ru":
-                bullets.append(f"Цена ${float(price):.2f} выше вашего диапазона ${float(min_price):.2f}-${float(max_price):.2f}.")
+                bullets.append(f"Это более премиальный сценарий: {_format_money(float(price))}, выше вашего диапазона {_format_money(float(min_price))}-{_format_money(float(max_price))}.")
             else:
-                bullets.append(f"Price ${float(price):.2f} is above your requested range ${float(min_price):.2f}-${float(max_price):.2f}.")
+                bullets.append(f"This is a more premium pricing option at {_format_money(float(price))}, above your {_format_money(float(min_price))}-{_format_money(float(max_price))} range.")
     elif budget is not None and price is not None and price <= budget:
         delta = float(budget) - float(price)
         if language == "ru":
             if delta >= max(5.0, float(budget) * 0.1):
-                bullets.append(f"Это плюс по цене: товар ниже бюджета на ${delta:.2f}.")
+                bullets.append(f"Сильный плюс по бюджету: цена ниже лимита на {_format_money(delta)}.")
             else:
-                bullets.append(f"Укладывается в ваш бюджет (${float(budget):.2f}).")
+                bullets.append(f"Комфортно укладывается в ваш бюджет ({_format_money(float(budget))}).")
         else:
             if delta >= max(5.0, float(budget) * 0.1):
-                bullets.append(f"Price advantage: this is ${delta:.2f} below your budget.")
+                bullets.append(f"Budget upside: this comes in {_format_money(delta)} below your cap.")
             else:
-                bullets.append(f"Within your budget (${float(budget):.2f}).")
+                bullets.append(f"Comfortably within your budget ({_format_money(float(budget))}).")
     elif budget is not None and price is not None and price > budget:
         if language == "ru":
-            bullets.append(f"Выше бюджета на ${float(price - budget):.2f}.")
+            bullets.append(f"Цена выше вашего лимита на {_format_money(float(price - budget))}, это вариант класса повыше.")
         else:
-            bullets.append(f"Over budget by ${float(price - budget):.2f}.")
+            bullets.append(f"Over budget by {_format_money(float(price - budget))}; positioned as a higher-tier option.")
 
-    if target_price is not None and price is not None:
-        diff = abs(float(price) - float(target_price))
+    if not highlights and marketing_only:
         if language == "ru":
-            bullets.append(f"Отклонение от целевой цены (${float(target_price):.2f}) составляет ${diff:.2f}.")
+            bullets.append("Описание в карточке краткое, поэтому лучше открыть товар и быстро проверить детали перед оплатой.")
         else:
-            bullets.append(f"Price is ${diff:.2f} away from your target (${float(target_price):.2f}).")
+            bullets.append("The listing details are brief, so it is worth a quick product-page check before checkout.")
+    elif evidence_signals and not highlights:
+        if language == "ru":
+            bullets.append(f"Опираюсь на конкретные признаки карточки: {', '.join(evidence_signals[:3])}.")
+        else:
+            bullets.append(f"Backed by concrete listing signals: {', '.join(evidence_signals[:3])}.")
 
     if price is None:
         if language == "ru":
-            bullets.append("Цена: нет данных в каталоге.")
+            bullets.append("Цена в карточке не указана, поэтому финальную стоимость лучше уточнить на странице товара.")
         else:
-            bullets.append("Price: Unknown from catalog.")
-    return bullets
+            bullets.append("Price is missing in the listing, so confirm the final amount on the product page.")
+
+    return [b for b in bullets if str(b).strip()][:5]
 
 
 def _tco_block(product: dict) -> dict[str, Any]:
