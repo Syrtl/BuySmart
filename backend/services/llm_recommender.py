@@ -20,7 +20,14 @@ STRICT RULES:
 3) Ask at most one follow-up question (in follow_up_question). Use null if no follow-up needed.
 4) Output ONLY valid JSON in the exact schema below. No markdown, no code fences, no extra text before or after the JSON.
 5) Use professional consultant language: concise, persuasive, and factual. Do not reveal internal scoring logic.
-6) For each recommendation: score_explanation must list only catalog facts (or "Unknown from catalog"). tco.yearly_cost only if lifespan_years exists in catalog (formula: price / lifespan_years). unknowns list missing catalog fields.
+6) Never mention scoring, ranking, keyword matches, embeddings, variables, or internal analysis.
+7) Do not copy noisy scraped strings verbatim (e.g., "Sponsored", duplicated prices, "product page", repeated fragments).
+8) For each recommendation, score_explanation must be EXACTLY 3 bullets (3 strings), each 1 sentence max:
+   - Bullet 1: what the customer gets (build/features/design from listing)
+   - Bullet 2: why it fits the request (must-haves/budget tie-in)
+   - Bullet 3: why it is good value at this price
+9) If a detail is missing, say: "Not specified in the listing."
+10) tco.yearly_cost only if lifespan_years exists in catalog (formula: price / lifespan_years). unknowns list missing catalog fields.
 
 REQUIRED JSON SCHEMA (output this and nothing else):
 {
@@ -50,7 +57,14 @@ REQUIRED JSON SCHEMA (output this and nothing else):
 }
 """
 
-DEVELOPER_PROMPT = """Reminder: Only catalog data. No invented facts. Missing data = "Unknown from catalog". One follow-up max. JSON only, no extra text."""
+DEVELOPER_PROMPT = """Reminder:
+- Use only provided catalog data.
+- No invented facts.
+- Missing details must be phrased as: "Not specified in the listing."
+- score_explanation must contain exactly 3 short natural bullets (1 sentence each).
+- Never mention score, ranking, keyword match counts, embeddings, variables, or analysis.
+- One follow-up question max.
+- JSON only, no extra text."""
 
 OVERRIDE_SYSTEM_ADDON = """
 When using catalog_override:
@@ -59,6 +73,7 @@ When using catalog_override:
 - Do not pick only by brand name when other prompt constraints exist.
 - For each recommendation, explain value like a consultant/marketer, using catalog facts only.
 - Never mention keyword-match counts, scoring formulas, or internal ranking steps.
+- score_explanation must be exactly 3 concise bullets and must not include raw scraped noise.
 - If price is missing for an item, say "Unknown from catalog" for that field.
 - Return JSON only."""
 
@@ -100,6 +115,225 @@ def _validate_schema(obj: Any) -> bool:
     return True
 
 
+_NOISY_LABEL_RE = re.compile(
+    r"(?i)\b(?:sponsored|product\s*page|list\s*price|list|price)\b\s*:?"
+)
+_DUP_CURRENCY_RE = re.compile(r"(\$\s*\d+(?:\.\d{1,2})?)\s*(?:\1\s*)+")
+_TECHNICAL_PHRASE_RE = re.compile(
+    r"(?i)\b(?:score|scoring|rank|ranking|keyword|keywords|match(?:es)?|embedding|embeddings|variable|analysis|algorithm)\b"
+)
+
+
+def _stringify_value(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return " ".join(_stringify_value(v) for v in value if _stringify_value(v).strip())
+    if isinstance(value, dict):
+        return " ".join(_stringify_value(v) for v in value.values() if _stringify_value(v).strip())
+    return str(value)
+
+
+def _clean_listing_text(value: Any, max_len: int = 1200) -> str:
+    text = _stringify_value(value)
+    if not text:
+        return ""
+    text = text.replace("\u00a0", " ")
+    text = _NOISY_LABEL_RE.sub(" ", text)
+    text = _DUP_CURRENCY_RE.sub(lambda m: m.group(1), text)
+    text = re.sub(r"(?i)(\$ ?\d+(?:\.\d{1,2})?)(?=\$)", r"\1 ", text)
+    text = re.sub(r"\s+", " ", text).strip(" -|,;:")
+    if max_len > 0 and len(text) > max_len:
+        text = text[:max_len].rstrip()
+    return text
+
+
+def _clean_bullets(value: Any, *, max_items: int = 8, max_len: int = 140) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        parts = [_stringify_value(v) for v in value]
+    else:
+        parts = re.split(r"(?:\n+|•|●|;|\|)", _stringify_value(value))
+    out: list[str] = []
+    seen: set[str] = set()
+    for part in parts:
+        cleaned = _clean_listing_text(part, max_len=max_len)
+        if len(cleaned) < 4:
+            continue
+        key = cleaned.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(cleaned)
+        if len(out) >= max_items:
+            break
+    return out
+
+
+def _parse_rating_hint(product: dict[str, Any]) -> float | None:
+    raw = product.get("rating")
+    if raw is None:
+        return None
+    try:
+        rating = float(raw)
+        if 0.0 <= rating <= 5.0:
+            return round(rating, 2)
+    except Exception:
+        return None
+    return None
+
+
+def _parse_review_count_hint(product: dict[str, Any]) -> int | None:
+    for key in ("reviewCount", "reviews_count", "review_count", "reviews"):
+        raw = product.get(key)
+        if raw is None:
+            continue
+        if isinstance(raw, (int, float)):
+            return max(0, int(round(float(raw))))
+        m = re.search(r"(\d+(?:,\d{3})*)", str(raw))
+        if m:
+            try:
+                return max(0, int(m.group(1).replace(",", "")))
+            except Exception:
+                continue
+    return None
+
+
+def _build_llm_safe_catalog(products: list[dict], limit: int = 60) -> list[dict[str, Any]]:
+    safe_rows: list[dict[str, Any]] = []
+    for raw in products[:limit]:
+        if not isinstance(raw, dict):
+            continue
+        title = _clean_listing_text(raw.get("title"), max_len=220)
+        description = _clean_listing_text(raw.get("description") or raw.get("snippet"), max_len=1200)
+        specs = _clean_listing_text(raw.get("specs"), max_len=800)
+        features = _clean_bullets(
+            raw.get("bullets") or raw.get("features") or raw.get("highlights") or description,
+            max_items=8,
+            max_len=140,
+        )
+        safe_rows.append(
+            {
+                "id": str(raw.get("id") or ""),
+                "title": title,
+                "price": _safe_price(raw.get("price")),
+                "category": _clean_listing_text(raw.get("category"), max_len=80),
+                "rating": _parse_rating_hint(raw),
+                "reviewCount": _parse_review_count_hint(raw),
+                "features": features,
+                "description": description,
+                "specs": specs,
+                "url": _clean_listing_text(raw.get("url"), max_len=400),
+            }
+        )
+    return safe_rows
+
+
+def _one_sentence(text: str) -> str:
+    cleaned = _clean_listing_text(text, max_len=220)
+    if not cleaned:
+        return ""
+    first = re.split(r"(?<=[.!?])\s+", cleaned, maxsplit=1)[0].strip()
+    if not first:
+        return ""
+    if first[-1] not in ".!?":
+        first += "."
+    return first
+
+
+def _fallback_human_bullets(user_text: str, rec: dict[str, Any], safe_item: dict[str, Any] | None) -> list[str]:
+    safe_item = safe_item or {}
+    features = safe_item.get("features") if isinstance(safe_item.get("features"), list) else []
+    desc = str(safe_item.get("description") or "").strip()
+    price = safe_item.get("price")
+    req = _clean_listing_text(user_text, max_len=100)
+
+    if features:
+        b1 = _one_sentence(f"What you get: {features[0]}")
+    elif desc:
+        b1 = _one_sentence(f"What you get: {desc}")
+    else:
+        b1 = "What you get: Not specified in the listing."
+
+    if req:
+        b2 = _one_sentence(f"Why it fits your request: it aligns with {req}")
+    else:
+        b2 = "Why it fits your request: it aligns with the intended use based on listed details."
+
+    if price is not None:
+        b3 = _one_sentence(f"Value at this price: for ${float(price):.2f}, it offers a balanced package for this category")
+    else:
+        b3 = "Value at this price: Not specified in the listing."
+
+    return [b1, b2, b3]
+
+
+def _normalize_llm_human_output(obj: dict[str, Any], safe_catalog: list[dict[str, Any]], user_text: str) -> dict[str, Any]:
+    safe_by_id = {str(row.get("id") or ""): row for row in safe_catalog}
+    safe_by_title = {str(row.get("title") or "").strip().lower(): row for row in safe_catalog if str(row.get("title") or "").strip()}
+
+    recs = obj.get("recommendations")
+    if not isinstance(recs, list):
+        return obj
+
+    for rec in recs:
+        if not isinstance(rec, dict):
+            continue
+        rid = str(rec.get("id") or "").strip()
+        rtitle = str(rec.get("title") or "").strip().lower()
+        safe_item = safe_by_id.get(rid) or safe_by_title.get(rtitle)
+
+        raw_bullets = rec.get("score_explanation")
+        clean_bullets: list[str] = []
+        if isinstance(raw_bullets, list):
+            seen: set[str] = set()
+            for raw in raw_bullets:
+                line = _one_sentence(str(raw or ""))
+                if not line:
+                    continue
+                if _TECHNICAL_PHRASE_RE.search(line):
+                    continue
+                key = line.lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                clean_bullets.append(line)
+                if len(clean_bullets) >= 3:
+                    break
+
+        if len(clean_bullets) < 3:
+            for extra in _fallback_human_bullets(user_text, rec, safe_item):
+                if len(clean_bullets) >= 3:
+                    break
+                if extra.lower() not in {b.lower() for b in clean_bullets}:
+                    clean_bullets.append(extra)
+        rec["score_explanation"] = clean_bullets[:3]
+
+        unknowns_raw = rec.get("unknowns")
+        unknowns = [str(x).strip() for x in (unknowns_raw if isinstance(unknowns_raw, list) else []) if str(x).strip()]
+        if safe_item:
+            auto_missing: list[str] = []
+            if safe_item.get("price") is None:
+                auto_missing.append("price")
+            if not str(safe_item.get("description") or "").strip():
+                auto_missing.append("description")
+            if not str(safe_item.get("specs") or "").strip():
+                auto_missing.append("specs")
+            if not (isinstance(safe_item.get("features"), list) and safe_item.get("features")):
+                auto_missing.append("features")
+            if safe_item.get("rating") is None:
+                auto_missing.append("rating")
+            if safe_item.get("reviewCount") is None:
+                auto_missing.append("reviewCount")
+            unknowns = list(dict.fromkeys(unknowns + auto_missing))
+        rec["unknowns"] = unknowns[:5]
+
+    return obj
+
+
 def recommend_via_llm(
     user_text: str,
     products: list[dict],
@@ -119,7 +353,8 @@ def recommend_via_llm(
     except ImportError:
         return None
 
-    catalog_snippet = json.dumps(products[:60], default=str)[:16000]
+    safe_catalog = _build_llm_safe_catalog(products, limit=60)
+    catalog_snippet = json.dumps(safe_catalog, default=str)[:16000]
     user_message = f"""USER_REQUEST:
 {user_text}
 
@@ -148,6 +383,7 @@ CATALOG (use only these products; recommend best {k}):
         obj = json.loads(raw_json)
         if not _validate_schema(obj):
             return None
+        obj = _normalize_llm_human_output(obj, safe_catalog, user_text)
         return obj
     except Exception:
         return None
