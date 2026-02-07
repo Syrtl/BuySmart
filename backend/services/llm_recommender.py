@@ -126,6 +126,13 @@ _PRICE_WORD_RE = re.compile(
     r"(?i)\b(?:price|pricing|budget|dollar|dollars|usd|cost|value at this price|"
     r"цена|бюджет|доллар|стоимость|цене)\b"
 )
+_RATING_FACT_RE = re.compile(r"(?i)\b\d(?:\.\d+)?\s*/\s*5\b")
+_REVIEW_FACT_RE = re.compile(r"(?i)\b(\d+(?:,\d{3})*)\s*(?:reviews?|ratings?|отзыв(?:ов|а)?|оцен(?:ок|ки)?)\b")
+_MATERIAL_FACT_RE = re.compile(
+    r"(?i)\b(?:steel|stainless|aluminum|alloy|wood|oak|walnut|bamboo|plastic|silicone|rubber|"
+    r"cotton|linen|wool|polyester|nylon|leather|suede|mesh|foam|memory\s+foam|"
+    r"сталь|алюминий|дерево|дуб|бамбук|пластик|силикон|резина|хлопок|лен|шерсть|кожа|сетка)\b"
+)
 _TECHNICAL_PHRASE_RE = re.compile(
     r"(?i)\b(?:score|scoring|rank|ranking|keyword|keywords|match(?:es)?|embedding|embeddings|variable|analysis|algorithm)\b"
 )
@@ -143,6 +150,27 @@ def _stringify_value(value: Any) -> str:
     return str(value)
 
 
+def _dedupe_comma_segments(text: str) -> str:
+    raw = str(text or "")
+    if "," not in raw:
+        return raw
+    parts = [p.strip() for p in re.split(r"\s*,\s*", raw) if p.strip()]
+    if len(parts) <= 1:
+        return raw
+    out: list[str] = []
+    seen: set[str] = set()
+    for part in parts:
+        key = re.sub(r"\s+", " ", part.lower()).strip(" .;:|-")
+        if not key:
+            continue
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(part)
+    joined = ", ".join(out)
+    return joined if joined else raw
+
+
 def _clean_listing_text(value: Any, max_len: int = 1200) -> str:
     text = _stringify_value(value)
     if not text:
@@ -153,6 +181,7 @@ def _clean_listing_text(value: Any, max_len: int = 1200) -> str:
     text = re.sub(r"(?i)(\$\s*\d+(?:,\d{3})*(?:\.\d{1,2})?)(?:\s*[,;:|/\-]?\s*\1)+", r"\1", text)
     text = re.sub(r"(?i)(\$ ?\d+(?:\.\d{1,2})?)(?=\$)", r"\1 ", text)
     text = _MONEY_RE.sub(" ", text)
+    text = _dedupe_comma_segments(text)
     text = re.sub(r"\s+", " ", text).strip(" -|,;:")
     if max_len > 0 and len(text) > max_len:
         text = text[:max_len].rstrip()
@@ -177,6 +206,54 @@ def _clean_bullets(value: Any, *, max_items: int = 8, max_len: int = 140) -> lis
             continue
         seen.add(key)
         out.append(cleaned)
+        if len(out) >= max_items:
+            break
+    return out
+
+
+def _strip_fact_noise(text: str) -> str:
+    cleaned = str(text or "")
+    if not cleaned:
+        return ""
+    cleaned = _RATING_FACT_RE.sub(" ", cleaned)
+    cleaned = _REVIEW_FACT_RE.sub(" ", cleaned)
+    cleaned = re.sub(r"(?i)\b(?:rating|rated|reviews?|ratings?|рейтинг|отзывы?|оценки?)\b", " ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" -|,;:")
+    return cleaned
+
+
+def _extract_fact_keys(text: str) -> set[str]:
+    keys: set[str] = set()
+    t = str(text or "")
+    if not t:
+        return keys
+    for m in _RATING_FACT_RE.finditer(t):
+        keys.add("rating:" + re.sub(r"\s+", "", m.group(0).lower()))
+    for m in _REVIEW_FACT_RE.finditer(t):
+        count = m.group(1).replace(",", "")
+        keys.add("reviews:" + count)
+    for m in _MATERIAL_FACT_RE.finditer(t):
+        keys.add("material:" + m.group(0).strip().lower())
+    return keys
+
+
+def _dedupe_explanation_bullets(lines: list[str], *, max_items: int = 4) -> list[str]:
+    out: list[str] = []
+    seen_lines: set[str] = set()
+    seen_facts: set[str] = set()
+    for raw in lines:
+        line = _one_sentence(str(raw or ""))
+        if not line:
+            continue
+        norm = re.sub(r"\s+", " ", line.lower()).strip()
+        if norm in seen_lines:
+            continue
+        fact_keys = _extract_fact_keys(line)
+        if fact_keys and all(k in seen_facts for k in fact_keys):
+            continue
+        seen_lines.add(norm)
+        seen_facts.update(fact_keys)
+        out.append(line)
         if len(out) >= max_items:
             break
     return out
@@ -339,7 +416,20 @@ def _normalize_llm_human_output(obj: dict[str, Any], safe_catalog: list[dict[str
                     break
                 if extra.lower() not in {b.lower() for b in clean_bullets}:
                     clean_bullets.append(extra)
-        rec["score_explanation"] = _enforce_single_price_mention(clean_bullets[:3])
+        rec["score_explanation"] = _dedupe_explanation_bullets(
+            _enforce_single_price_mention(clean_bullets),
+            max_items=3,
+        )
+        if len(rec["score_explanation"]) < 3:
+            fallback = _dedupe_explanation_bullets(
+                _enforce_single_price_mention(_fallback_human_bullets(user_text, rec, safe_item)),
+                max_items=3,
+            )
+            for line in fallback:
+                if len(rec["score_explanation"]) >= 3:
+                    break
+                if line.lower() not in {x.lower() for x in rec["score_explanation"]}:
+                    rec["score_explanation"].append(line)
 
         unknowns_raw = rec.get("unknowns")
         unknowns = [str(x).strip() for x in (unknowns_raw if isinstance(unknowns_raw, list) else []) if str(x).strip()]
@@ -1073,6 +1163,7 @@ def _collect_listing_highlights(product: dict, language: str) -> list[str]:
     seen: set[str] = set()
     for chunk in chunks:
         cleaned = _clean_listing_text(chunk, max_len=140)
+        cleaned = _strip_fact_noise(cleaned)
         if len(cleaned) < 12:
             continue
         if re.fullmatch(r"[\d\W]+", cleaned):
@@ -1200,7 +1291,10 @@ def _score_explanation_bullets(
     else:
         bullets.append("Overall value: it looks like a balanced and practical choice in this category.")
 
-    return _enforce_single_price_mention([b for b in bullets if str(b).strip()][:5])
+    return _dedupe_explanation_bullets(
+        _enforce_single_price_mention([b for b in bullets if str(b).strip()][:5]),
+        max_items=4,
+    )
 
 
 def _tco_block(product: dict) -> dict[str, Any]:
