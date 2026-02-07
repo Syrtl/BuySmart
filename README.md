@@ -1,4 +1,4 @@
-#ProcureWise (BuySmart)
+# BuySmart
 
 This is a Chrome extension (built with Manifest V3) that hooks up to a FastAPI backend to suggest products from a store’s catalog.
 
@@ -16,7 +16,7 @@ How to Demo (5 steps)
    Go to chrome://extensions, switch on Developer mode, pick “Load unpacked,” and grab the extension/ folder from this repo.
 
 2. 1. **Open Extension popup.** 
-    Click the ProcureWise Chrome toolbar icon.
+    Click the BuySmart Chrome toolbar icon.
 
 2. **Set base API URL in popup.** 
     Set the **Base API URL** to: 
@@ -29,10 +29,10 @@ How to Demo (5 steps)
     Select **Amazon** or **Grainger**, enter a search term for purchasing (i.e. *office chair under $200*) and click on the **Recommend** button. The recommendation will appear in content card format with the title of the item, price of the item, category of the item, and an explanation.
 
 5. Page Catalog Mode (recommendation based on current page)
-     - Recommendation can be limited to only products that have been scanned by the Procuress from the **open shopping page** (e.g. Amazon search results or Granger's category page).
+     - Recommendation can be limited to only products that have been scanned by BuySmart from the **open shopping page** (e.g. Amazon search results or Granger's category page).
     
      1. Open the Amazon or Grainger **Category or Search Results page** in your current tab. 
-     2. Open the ProcureWise popup and **Scan this page**. After successfully scanning, you will see the number of products scanned (i.e. *37 Products Scanned*).
+     2. Open the BuySmart popup and **Scan this page**. After successfully scanning, you will see the number of products scanned (i.e. *37 Products Scanned*).
      3. Select **Store: Page (use after scan)** if you want to use the above options out of the scanned product list.
      4. Enter search criteria (i.e. *chair under $150*) and click **Recommend**.
      5. You will only receive product recommendations from the scanned products and all titles that include URLs will open in new tabs. To start over, click on the **Clear Scanned Catalog** button. 
@@ -130,7 +130,7 @@ To run the demo, you will need to do the following steps:
    
    
 3. **Try a recommendation**
-   - Leave **API Base URL** as `http://localhost:8000` (default). Click the ProcureWise icon.
+   - Leave **API Base URL** as `http://localhost:8000` (default). Click the BuySmart icon.
    - Choose **Amazon** or **Grainger**, type e.g. *durable office chair under $200*, click **Recommend**.
    - Results appear as cards. If the backend is not running, the popup shows a friendly error.
 
@@ -287,7 +287,7 @@ Check the logs for an error and set the **DISABLE_EMBEDDINGS=1** environment var
 
 ### 5. How to use the extension with Railway:
 
-1. Click on the ProcureWise popup.
+1. Click on the BuySmart popup.
 2. Input your Railway URL as your **API Base URL** (e.g. `https://your-app.up.railway.app`).
 3. Click on Test Connection, you should see a "Success:..." message returned.
 4. This connection will be saved in your localStorage for the next request you make.
