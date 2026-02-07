@@ -18,13 +18,6 @@ How to Demo (5 steps)
 2. 1. **Open Extension popup.** 
     Click the BuySmart Chrome toolbar icon.
 
-2. **Set base API URL in popup.** 
-    Set the **Base API URL** to: 
-    `https://buysmart-production-1506.up.railway.app` in the popup window.
-
-3. **Test Connection.** 
-    Click the **Test Connection** button, you will see a successful connection message, returning a successful status code for the GET /health API call.
-
 4. **Get recommendation.**
     Select **Amazon** or **Grainger**, enter a search term for purchasing (i.e. *office chair under $200*) and click on the **Recommend** button. The recommendation will appear in content card format with the title of the item, price of the item, category of the item, and an explanation.
 
