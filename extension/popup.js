@@ -33,11 +33,21 @@ let timingModal = null;
 let valueChartModal = null;
 
 function getApiBase() {
-  const v = (apiBaseEl && apiBaseEl.value && apiBaseEl.value.trim()) || '';
-  return v.replace(/\/+$/, '') || DEFAULT_API_BASE;
+  const fromInput = (apiBaseEl && apiBaseEl.value && apiBaseEl.value.trim()) || '';
+  if (fromInput) {
+    return fromInput.replace(/\/+$/, '');
+  }
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY_API_BASE) || '';
+    if (saved.trim()) {
+      return saved.trim().replace(/\/+$/, '');
+    }
+  } catch (_) {}
+  return DEFAULT_API_BASE;
 }
 
 function loadSavedApiBase() {
+  if (!apiBaseEl) return;
   try {
     const saved = localStorage.getItem(STORAGE_KEY_API_BASE);
     if (saved && saved.trim()) {
@@ -50,6 +60,7 @@ function loadSavedApiBase() {
 }
 
 function saveApiBase() {
+  if (!apiBaseEl) return;
   try {
     localStorage.setItem(STORAGE_KEY_API_BASE, getApiBase());
   } catch (_) {}
