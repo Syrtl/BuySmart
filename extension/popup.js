@@ -327,7 +327,7 @@ function renderPriceHistoryChart(points, currency) {
     return;
   }
 
-  var width = 360;
+  var width = Math.max(360, Math.round((priceHistoryChartWrapEl.clientWidth || 360) - 2));
   var height = 170;
   var padL = 40;
   var padR = 10;
